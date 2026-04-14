@@ -1780,7 +1780,7 @@ function renderSellGrid() {
            </span>
          </span>`
       : '';
-    const allBtn = qty > 1 ? `<button onclick="sellStack('${k}', ${qty})" style="margin-left:4px">Всё (${qty})</button>` : '';
+    const allBtn = qty > 1 ? `<button onclick="sellStack('${k}', ${qty})" style="margin-left:4px">Макс (${qty})</button>` : '';
     cards.push(`<div class="shop-card">
       <div class="ico">${it.ico}</div>
       <div class="nm">${it.name}</div>
