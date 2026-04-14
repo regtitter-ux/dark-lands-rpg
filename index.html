@@ -2453,27 +2453,38 @@ function arenaEntryFromPlayer(p) {
 
 function syncEsFromArena(players) {
   const byId = new Map(players.map(p => [p.id, p]));
-  const existing = Es.filter(e => e._pvp && byId.has(e._pvpTargetId));
-  const existingIds = new Set(existing.map(e => e._pvpTargetId));
-  for (const e of Es) {
-    if (e._pvp && !byId.has(e._pvpTargetId) && !e._leaveLogged) {
+  const prevById = new Map();
+  for (const e of Es) if (e._pvp) prevById.set(e._pvpTargetId, e);
+
+  for (const [id, e] of prevById) {
+    if (!byId.has(id) && !e._leaveLogged) {
       log(`<span class="info">${escapeHtml(e._pvpUsername)} покидает арену.</span>`);
     }
   }
-  for (const e of existing) {
-    const p = byId.get(e._pvpTargetId);
-    e.hp = p.hp|0; e.hpMax = p.hpMax|0;
-    e._dead = !!p.dead; e._defending = !!p.defending;
-    e.name = p.username + (p.cls?` (${p.cls})`:'');
+
+  const next = [];
+  let structureChanged = prevById.size !== players.length;
+  for (const p of players) {
+    const prev = prevById.get(p.id);
+    const revived = prev && prev._dead && !p.dead;
+    if (!prev || revived) {
+      next.push(arenaEntryFromPlayer(p));
+      structureChanged = true;
+      if (!prev) log(`<span class="bad">На арене появился ${escapeHtml(p.username)}!</span>`);
+      else log(`<span class="bad">${escapeHtml(p.username)} возвращается на арену!</span>`);
+    } else {
+      prev.hp = p.hp|0; prev.hpMax = p.hpMax|0;
+      prev._dead = !!p.dead; prev._defending = !!p.defending;
+      prev.name = p.username + (p.cls?` (${p.cls})`:'');
+      next.push(prev);
+    }
   }
-  const newcomers = players.filter(p => !existingIds.has(p.id));
-  for (const p of newcomers) {
-    existing.push(arenaEntryFromPlayer(p));
-    log(`<span class="bad">На арене появился ${escapeHtml(p.username)}!</span>`);
-  }
-  Es = existing;
+  Es = next;
   if (target >= Es.length) target = 0;
   ensureTarget();
+  if (structureChanged) {
+    const ca = $('combat-area'); if (ca) ca.innerHTML = '';
+  }
 }
 
 async function pollArenaStateOnce() {
