@@ -1361,10 +1361,11 @@ async function cloudPull() {
   renderCloudPanel();
 }
 async function doLogout() {
-  if (!(await confirmDialog('Выйти из аккаунта?<br><span style="color:#8b6f47">Локальный сейв останется на этом устройстве.</span>', { title:'Выход', okText:'Выйти' }))) return;
+  if (!(await confirmDialog('Выйти из аккаунта и вернуться в главное меню?<br><span style="color:#8b6f47">Прогресс уже сохранён в облаке.</span>', { title:'Выход', okText:'Выйти' }))) return;
   authClear();
   if (cloudPushTimer) { clearTimeout(cloudPushTimer); cloudPushTimer = null; }
-  renderCloudPanel(); fetchLeaderboard();
+  try { localStorage.removeItem(SAVE_KEY); } catch {}
+  location.reload();
 }
 async function fetchLeaderboard() {
   const el = $('leaders-body');
