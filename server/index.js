@@ -52,6 +52,12 @@ async function initDb() {
       ON player_data (lvl DESC, stage_max DESC, gold DESC, bosses DESC);
   `);
   await pool.query(`
+    ALTER TABLE player_data ADD COLUMN IF NOT EXISTS pvp_kills INT NOT NULL DEFAULT 0;
+  `);
+  await pool.query(`
+    ALTER TABLE player_data ADD COLUMN IF NOT EXISTS pending_gold_delta INT NOT NULL DEFAULT 0;
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS app_meta (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -172,8 +178,14 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/me', auth, async (req, res) => {
   try {
+    await pool.query(
+      `UPDATE player_data
+       SET gold = GREATEST(0, gold + pending_gold_delta), pending_gold_delta = 0
+       WHERE user_id = $1 AND pending_gold_delta <> 0`,
+      [req.user.uid]
+    );
     const r = await pool.query(
-      `SELECT u.username, p.cls, p.lvl, p.stage_max, p.gold, p.bosses, p.save_blob, p.updated_at
+      `SELECT u.username, p.cls, p.lvl, p.stage_max, p.gold, p.bosses, p.pvp_kills, p.save_blob, p.updated_at
        FROM users u LEFT JOIN player_data p ON p.user_id = u.id
        WHERE u.id = $1`,
       [req.user.uid]
@@ -202,20 +214,23 @@ app.post('/api/save', auth, async (req, res) => {
     return res.status(400).json({ error: 'bad payload' });
   }
   try {
-    await pool.query(
+    const r = await pool.query(
       `INSERT INTO player_data (user_id, cls, lvl, stage_max, gold, bosses, save_blob, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
        ON CONFLICT (user_id) DO UPDATE SET
          cls = COALESCE(EXCLUDED.cls, player_data.cls),
          lvl = EXCLUDED.lvl,
          stage_max = EXCLUDED.stage_max,
-         gold = EXCLUDED.gold,
+         gold = GREATEST(0, EXCLUDED.gold + player_data.pending_gold_delta),
          bosses = EXCLUDED.bosses,
          save_blob = EXCLUDED.save_blob,
-         updated_at = NOW()`,
+         pending_gold_delta = 0,
+         updated_at = NOW()
+       RETURNING gold, pvp_kills`,
       [req.user.uid, cls || null, lvl|0, stage_max|0, gold|0, bosses|0, save_blob || null]
     );
-    res.json({ ok: true });
+    const row = r.rows[0] || {};
+    res.json({ ok: true, gold: row.gold|0, pvp_kills: row.pvp_kills|0 });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'db error' });
@@ -304,10 +319,88 @@ app.post('/api/market/trade', auth, (req, res) => {
   return res.status(400).json({ error: 'bad action' });
 });
 
+// ==================== PVP ARENA ====================
+app.get('/api/arena', auth, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT u.id, u.username, p.cls, p.lvl,
+              GREATEST(0, p.gold + p.pending_gold_delta) AS gold,
+              p.pvp_kills, p.save_blob
+       FROM player_data p JOIN users u ON u.id = p.user_id
+       WHERE u.id <> $1
+       ORDER BY p.lvl DESC, p.gold DESC
+       LIMIT 30`,
+      [req.user.uid]
+    );
+    const list = r.rows.map(row => ({
+      id: row.id,
+      username: row.username,
+      cls: row.cls,
+      lvl: row.lvl|0,
+      gold: row.gold|0,
+      pvp_kills: row.pvp_kills|0,
+      hp_max: (row.save_blob && row.save_blob.P && (row.save_blob.P.hpMax|0)) || null,
+    }));
+    res.json({ players: list });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'db error' });
+  }
+});
+
+app.post('/api/arena/resolve', auth, async (req, res) => {
+  const targetId = parseInt(req.body?.target_id)|0;
+  const won = !!req.body?.won;
+  const me = req.user.uid;
+  if (!targetId || targetId === me) return res.status(400).json({ error: 'bad target' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const winnerId = won ? me : targetId;
+    const loserId  = won ? targetId : me;
+    const lo = await client.query(
+      `SELECT GREATEST(0, gold + pending_gold_delta) AS eff
+       FROM player_data WHERE user_id = $1 FOR UPDATE`,
+      [loserId]
+    );
+    if (!lo.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'loser not found' }); }
+    const transfer = Math.floor((lo.rows[0].eff|0) * 0.05);
+    // Only non-caller accumulates pending; caller reconciles its own gold locally.
+    const pendingForLoser  = loserId  === me ? 0 : -transfer;
+    const pendingForWinner = winnerId === me ? 0 : +transfer;
+    await client.query(
+      `UPDATE player_data SET pending_gold_delta = pending_gold_delta + $1, updated_at = NOW()
+       WHERE user_id = $2`,
+      [pendingForLoser, loserId]
+    );
+    const w = await client.query(
+      `UPDATE player_data SET pending_gold_delta = pending_gold_delta + $1,
+           pvp_kills = pvp_kills + 1, updated_at = NOW()
+       WHERE user_id = $2
+       RETURNING pvp_kills`,
+      [pendingForWinner, winnerId]
+    );
+    await client.query('COMMIT');
+    res.json({
+      ok: true, won, transfer,
+      gold_delta: won ? +transfer : -transfer,
+      pvp_kills: won ? (w.rows[0].pvp_kills|0) : null,
+    });
+  } catch (e) {
+    await client.query('ROLLBACK').catch(()=>{});
+    console.error(e);
+    res.status(500).json({ error: 'db error' });
+  } finally {
+    client.release();
+  }
+});
+
 app.get('/api/leaderboard', async (_req, res) => {
   try {
     const r = await pool.query(
-      `SELECT u.username AS nick, p.cls, p.lvl, p.stage_max, p.gold, p.bosses, p.updated_at
+      `SELECT u.username AS nick, p.cls, p.lvl, p.stage_max,
+              GREATEST(0, p.gold + p.pending_gold_delta) AS gold,
+              p.bosses, p.pvp_kills, p.updated_at
        FROM player_data p JOIN users u ON u.id = p.user_id
        ORDER BY p.lvl DESC, p.stage_max DESC, p.gold DESC, p.bosses DESC
        LIMIT 50`

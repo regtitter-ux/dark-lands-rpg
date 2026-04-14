@@ -935,7 +935,7 @@ const ENEMIES = [
 
 // ==================== ЛОКАЦИИ ====================
 const LOCATIONS = {
-  village:   { name:'Деревня Тихий Дол',   ico:'<img class="gi" src="assets/icons/village.svg" alt="">', desc:'Уютные дома, дым из труб, торговцы и трактирщик.', actions:['hunt','shop','inn','travel'], shop:'village' },
+  village:   { name:'Деревня Тихий Дол',   ico:'<img class="gi" src="assets/icons/village.svg" alt="">', desc:'Уютные дома, дым из труб, торговцы и трактирщик.', actions:['hunt','arena','shop','inn','travel'], shop:'village' },
   forest:    { name:'Сумрачный Лес',       ico:'<img class="gi" src="assets/icons/pine-tree.svg" alt="">', desc:'Старые сосны шепчут на ветру. Тропа петляет среди корней.', actions:['hunt','rest','shop','travel'] },
   swamp:     { name:'Гнилые Топи',         ico:'<img class="gi" src="assets/icons/withered-tree.svg" alt="">', desc:'Густой туман, запах тлена и тёмная вода под ногами.', actions:['hunt','rest','shop','travel'] },
   cave:      { name:'Пещеры Ульдара',      ico:'<img class="gi" src="assets/icons/hole.svg" alt="">', desc:'Влажные стены, эхо капель и чьи-то рычания во тьме.', actions:['hunt','shop','travel'] },
@@ -1043,7 +1043,7 @@ const QUESTS = {
 };
 
 // ==================== СОСТОЯНИЕ ====================
-let P = null, Es = [], target = 0, inCombat = false;
+let P = null, Es = [], target = 0, inCombat = false, pvpMode = false;
 let combatTick = null, lastRegen = 0;
 let unlocked = ['village','forest'];
 let logHistory = [];
@@ -1368,7 +1368,14 @@ async function cloudSync() {
       body: JSON.stringify(s)
     });
     if (r.status === 401) { authClear(); renderCloudPanel(); throw new Error('сессия истекла'); }
-    if (!r.ok) { const j = await r.json().catch(()=>({})); throw new Error(j.error || 'save failed'); }
+    const j = await r.json().catch(()=>({}));
+    if (!r.ok) { throw new Error(j.error || 'save failed'); }
+    if (P && typeof j.gold === 'number' && j.gold !== P.gold) {
+      if (j.gold < P.gold) log(`<span class="bad">На арене с тебя сняли ${P.gold - j.gold} <img class="gi" src="assets/icons/two-coins.svg" alt=""> пока тебя не было.</span>`);
+      P.gold = j.gold|0;
+      render();
+    }
+    if (P && typeof j.pvp_kills === 'number') P.pvp_kills = j.pvp_kills|0;
     const lb = $('tab-leaders');
     if (lb && lb.style.display !== 'none') fetchLeaderboard();
   } finally { cloudPushing = false; }
@@ -1384,8 +1391,10 @@ async function cloudFetch() {
 function applyCloudSave(j) {
   if (!j || !j.save_blob || !j.save_blob.P) return false;
   P = j.save_blob.P;
+  if (typeof j.gold === 'number') P.gold = j.gold|0;
+  if (typeof j.pvp_kills === 'number') P.pvp_kills = j.pvp_kills|0;
   unlocked = j.save_blob.unlocked || ['village','forest'];
-  Es = []; target = 0; inCombat = false;
+  Es = []; target = 0; inCombat = false; pvpMode = false;
   if (P && !P.stages) P.stages = Object.fromEntries(Object.keys(LOCATIONS).map(k=>[k,1]));
   if (P && P.stages) { for (const k of Object.keys(LOCATIONS)) if (!P.stages[k]) P.stages[k]=1; }
   migrateEquipment();
@@ -1428,6 +1437,7 @@ async function fetchLeaderboard() {
         <td style="padding:3px 6px;text-align:right">${row.stage_max}</td>
         <td style="padding:3px 6px;text-align:right;color:#f4d03f">${row.gold}</td>
         <td style="padding:3px 6px;text-align:right">${row.bosses}</td>
+        <td style="padding:3px 6px;text-align:right;color:#cf4030">${row.pvp_kills|0}</td>
       </tr>`;
     }).join('');
     el.innerHTML = `<table style="width:100%;border-collapse:collapse">
@@ -1438,6 +1448,7 @@ async function fetchLeaderboard() {
         <th style="text-align:right;padding:3px 6px">Этап</th>
         <th style="text-align:right;padding:3px 6px">Золото</th>
         <th style="text-align:right;padding:3px 6px">Боссы</th>
+        <th style="text-align:right;padding:3px 6px" title="Убийств на арене">PvP</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
@@ -1992,6 +2003,7 @@ function renderActions() {
   const loc = LOCATIONS[P.location];
   const btns = [];
   if (loc.actions.includes('hunt')) btns.push(`<button class="act" onclick="hunt()"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Искать врагов</button>`);
+  if (loc.actions.includes('arena')) btns.push(`<button class="act" onclick="arena()"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Круговая арена</button>`);
   if (loc.actions.includes('rest')) btns.push(`<button class="act" onclick="rest()"><img class="gi" src="assets/icons/sleepy.svg" alt=""> Отдохнуть</button>`);
   if (loc.actions.includes('shop')) btns.push(`<button class="act" onclick="openShop()"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Лавка</button>`);
   if (loc.actions.includes('inn'))  btns.push(`<button class="act" onclick="inn()"><img class="gi" src="assets/icons/beer-stein.svg" alt=""> Трактир</button>`);
@@ -2400,6 +2412,77 @@ function generateStageGroup(loc, s) {
   return { group, bossStage };
 }
 
+function buildArenaEnemy(p) {
+  const lvl = Math.max(1, p.lvl|0);
+  const hp = Math.max(40, (p.hp_max|0) || (80 + lvl*14));
+  const d1 = 4 + Math.floor(lvl*1.8);
+  const d2 = 8 + Math.floor(lvl*2.6);
+  return {
+    id: 'pvp_'+p.id,
+    name: p.username + (p.cls?` (${p.cls})`:''),
+    ico: '<img class="gi" src="assets/icons/crossed-swords.svg" alt="">',
+    hp, hpMax: hp,
+    dmg: [d1, Math.max(d1+1, d2)],
+    xp: 0, gold: [0,0],
+    lvl, loc: ['village'],
+    _pvp: true, _pvpTargetId: p.id, _pvpUsername: p.username, _pvpResolved: false,
+  };
+}
+async function arena() {
+  if (inCombat) return;
+  if (!authToken()) { log(`<span class="bad">Чтобы выйти на арену, нужно войти в аккаунт.</span>`); return; }
+  let list = [];
+  try {
+    const r = await fetch(API_BASE+'/api/arena', { headers: {'Authorization':'Bearer '+authToken()} });
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    const j = await r.json();
+    list = Array.isArray(j.players) ? j.players : [];
+  } catch (e) {
+    log(`<span class="bad">Арена недоступна: ${escapeHtml(e.message)}.</span>`);
+    return;
+  }
+  hr();
+  log(`<span class="sys"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> — Круговая арена —</span>`);
+  if (!list.length) {
+    log(`<span class="info">Арена пуста — нет других героев. Загляни позже.</span>`);
+    return;
+  }
+  Es = list.slice(0, 6).map(buildArenaEnemy);
+  for (const e of Es) scheduleEnemy(e, true);
+  target = 0;
+  pvpMode = true;
+  inCombat = true;
+  startCombatLoop();
+  log(`<span class="bad">Все против всех! Соперники: ${Es.map(e=>e.name).join(', ')}.</span>`);
+  render();
+}
+async function resolveArenaFight(targetId, won) {
+  try {
+    const r = await fetch(API_BASE+'/api/arena/resolve', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken()},
+      body: JSON.stringify({ target_id: targetId, won: !!won })
+    });
+    const j = await r.json().catch(()=>({}));
+    if (!r.ok || !j.ok) return null;
+    return j;
+  } catch { return null; }
+}
+async function onArenaEnemyDeath(e) {
+  if (e._pvpResolved) return;
+  e._pvpResolved = true;
+  const j = await resolveArenaFight(e._pvpTargetId, true);
+  if (!j) return;
+  const delta = j.gold_delta|0;
+  P.gold = Math.max(0, P.gold + delta);
+  if (typeof j.pvp_kills === 'number') P.pvp_kills = j.pvp_kills;
+  log(`<span class="good">Трофей с ${escapeHtml(e._pvpUsername)}: +${j.transfer} <img class="gi" src="assets/icons/two-coins.svg" alt="">. Убийств на арене: ${j.pvp_kills}.</span>`);
+  render();
+  const lb = $('tab-leaders');
+  if (lb && lb.style.display !== 'none') fetchLeaderboard();
+  cloudSync().catch(()=>{});
+}
+
 function hunt() {
   const loc = P.location;
   const s = P.stages[loc] || 1;
@@ -2515,7 +2598,11 @@ function flee() {
 
 function finishPlayerTurn(skipDeathCheck=false) {
   for (let i=0;i<Es.length;i++) {
-    if (Es[i].hp<=0 && !Es[i]._dead) { Es[i]._dead = true; log(`<span class="good"><img class="gi" src="assets/icons/star-formation.svg" alt=""> ${Es[i].name} повержен!</span>`); }
+    if (Es[i].hp<=0 && !Es[i]._dead) {
+      Es[i]._dead = true;
+      log(`<span class="good"><img class="gi" src="assets/icons/star-formation.svg" alt=""> ${Es[i].name} повержен!</span>`);
+      if (Es[i]._pvp) onArenaEnemyDeath(Es[i]);
+    }
   }
   if (!aliveIdx().length) { winFight(); return; }
   ensureTarget();
@@ -2657,6 +2744,13 @@ function cascadeOverflow(pool) {
 }
 
 function winFight() {
+  if (pvpMode) {
+    hr();
+    log(`<span class="epic"><img class="gi" src="assets/icons/star-formation.svg" alt=""> Арена зачищена!</span>`);
+    stopCombatLoop(); inCombat=false; pvpMode=false; Es=[]; target=0;
+    render();
+    return;
+  }
   awardKillsLoot(Es);
   const loc = P.location;
   P.stages[loc] = (P.stages[loc]||1) + 1;
@@ -2694,6 +2788,27 @@ document.addEventListener('keydown', e => {
 });
 function die() {
   hr();
+  if (pvpMode) {
+    const attacker = Es.find(e => e._pvp && e.hp > 0) || Es.find(e => e._pvp);
+    if (attacker) {
+      (async () => {
+        const j = await resolveArenaFight(attacker._pvpTargetId, false);
+        if (j) {
+          const delta = j.gold_delta|0;
+          P.gold = Math.max(0, P.gold + delta);
+          log(`<span class="bad">${escapeHtml(attacker._pvpUsername)} забирает ${j.transfer} <img class="gi" src="assets/icons/two-coins.svg" alt=""> с твоего кошелька.</span>`);
+          render();
+          cloudSync().catch(()=>{});
+        }
+      })();
+    }
+    P.hp = Math.floor(eff('hpMax')/2);
+    P.mp = Math.floor(eff('mpMax')/2);
+    log(`<span class="bad"><img class="gi" src="assets/icons/death-skull.svg" alt=""> Ты повержен на арене. Опыт и этап остались нетронутыми.</span>`);
+    stopCombatLoop(); inCombat=false; pvpMode=false; Es=[]; target=0;
+    render();
+    return;
+  }
   const loc = P.location;
   const oldStage = P.stages[loc]||1;
   const newStage = Math.max(1, oldStage-3);
