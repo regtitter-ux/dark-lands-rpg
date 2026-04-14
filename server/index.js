@@ -63,6 +63,16 @@ async function initDb() {
       value TEXT NOT NULL
     );
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS market_state (
+      key TEXT PRIMARY KEY,
+      stock JSONB NOT NULL DEFAULT '{}',
+      prices JSONB NOT NULL DEFAULT '{}',
+      news JSONB NOT NULL DEFAULT '[]',
+      next_at BIGINT NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
   if (!JWT_SECRET) {
     const r = await pool.query(`SELECT value FROM app_meta WHERE key = 'jwt_secret'`);
     if (r.rowCount) {
@@ -259,8 +269,47 @@ const EVENT_TEMPLATES = [
   { kind:'down', mul:[0.4,0.6], tpl:(t,r)=>`${t} получил долг ${r}ом — ему бы скинуть лишнее.` }
 ];
 const MARKET_PERIOD_MS = 60000;
-const market = { prices:{}, stock:{}, news:[], nextAt:0 };
+const MAX_TRADE_QTY = 500;
+const market = { prices:{}, stock:{}, news:[], nextAt:0, loaded:false };
 for (const loc of LOCATION_IDS) market.stock[loc] = Object.fromEntries(RESOURCE_IDS.map(r=>[r,0]));
+
+function snapshotMarket() {
+  return { prices: market.prices, stock: market.stock, news: market.news, nextAt: market.nextAt };
+}
+async function persistMarket() {
+  try {
+    await pool.query(
+      `INSERT INTO market_state (key, stock, prices, news, next_at, updated_at)
+         VALUES ('singleton', $1::jsonb, $2::jsonb, $3::jsonb, $4, NOW())
+       ON CONFLICT (key) DO UPDATE
+         SET stock = EXCLUDED.stock, prices = EXCLUDED.prices,
+             news = EXCLUDED.news, next_at = EXCLUDED.next_at,
+             updated_at = NOW()`,
+      [JSON.stringify(market.stock), JSON.stringify(market.prices),
+       JSON.stringify(market.news), market.nextAt]
+    );
+  } catch (e) { console.error('market persist failed:', e.message); }
+}
+async function loadMarket() {
+  try {
+    const r = await pool.query(
+      `SELECT stock, prices, news, next_at FROM market_state WHERE key = 'singleton'`
+    );
+    if (r.rowCount) {
+      market.stock  = r.rows[0].stock  || {};
+      market.prices = r.rows[0].prices || {};
+      market.news   = r.rows[0].news   || [];
+      market.nextAt = Number(r.rows[0].next_at) || 0;
+    }
+    for (const loc of LOCATION_IDS) {
+      if (!market.stock[loc]) market.stock[loc] = {};
+      for (const rid of RESOURCE_IDS) {
+        if (typeof market.stock[loc][rid] !== 'number') market.stock[loc][rid] = 0;
+      }
+    }
+    market.loaded = true;
+  } catch (e) { console.error('market load failed:', e.message); market.loaded = true; }
+}
 
 function rndF(a,b){ return a + Math.random()*(b-a); }
 function regenMarket() {
@@ -291,6 +340,7 @@ function regenMarket() {
   market.prices = prices;
   market.news = news;
   market.nextAt = Date.now() + MARKET_PERIOD_MS;
+  persistMarket();
 }
 function ensureMarket() {
   if (!market.prices || !Object.keys(market.prices).length || Date.now() >= market.nextAt) regenMarket();
@@ -298,25 +348,76 @@ function ensureMarket() {
 
 app.get('/api/market', (_req, res) => {
   ensureMarket();
-  res.json({ prices: market.prices, stock: market.stock, news: market.news, nextAt: market.nextAt });
+  res.json(snapshotMarket());
 });
 
-app.post('/api/market/trade', auth, (req, res) => {
+app.post('/api/market/trade', auth, async (req, res) => {
   ensureMarket();
   const { loc, rid, qty, action } = req.body || {};
-  if (!LOCATION_IDS.includes(loc) || !RESOURCE_IDS.includes(rid)) return res.status(400).json({ error: 'bad payload' });
-  const n = Math.max(1, Math.min(9999, parseInt(qty)|0));
-  const price = market.prices[loc][rid];
-  if (action === 'buy') {
-    const have = market.stock[loc][rid] || 0;
-    if (have < n) return res.status(409).json({ error: 'out of stock', stock: have, price, market: { prices: market.prices, stock: market.stock, news: market.news, nextAt: market.nextAt } });
-    market.stock[loc][rid] = have - n;
-    return res.json({ ok:true, action, loc, rid, qty:n, price, total: price*n, market: { prices: market.prices, stock: market.stock, news: market.news, nextAt: market.nextAt } });
-  } else if (action === 'sell') {
-    market.stock[loc][rid] = (market.stock[loc][rid]||0) + n;
-    return res.json({ ok:true, action, loc, rid, qty:n, price, total: price*n, market: { prices: market.prices, stock: market.stock, news: market.news, nextAt: market.nextAt } });
+  if (!LOCATION_IDS.includes(loc) || !RESOURCE_IDS.includes(rid)) {
+    return res.status(400).json({ error: 'bad payload' });
   }
-  return res.status(400).json({ error: 'bad action' });
+  if (action !== 'buy' && action !== 'sell') {
+    return res.status(400).json({ error: 'bad action' });
+  }
+  const n = Math.max(1, Math.min(MAX_TRADE_QTY, parseInt(qty)|0));
+  const price = market.prices[loc][rid]|0;
+  const total = price * n;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const pr = await client.query(
+      `SELECT GREATEST(0, gold + pending_gold_delta) AS eff
+         FROM player_data WHERE user_id = $1 FOR UPDATE`,
+      [req.user.uid]
+    );
+    if (!pr.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'no player' });
+    }
+    const eff = pr.rows[0].eff|0;
+
+    if (action === 'buy') {
+      const have = market.stock[loc][rid]|0;
+      if (have < n) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'out of stock', stock: have, price, market: snapshotMarket() });
+      }
+      if (eff < total) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'no gold', need: total, have: eff, market: snapshotMarket() });
+      }
+      await client.query(
+        `UPDATE player_data
+            SET pending_gold_delta = pending_gold_delta - $1, updated_at = NOW()
+          WHERE user_id = $2`,
+        [total, req.user.uid]
+      );
+      market.stock[loc][rid] = have - n;
+      await client.query('COMMIT');
+      persistMarket();
+      return res.json({ ok:true, action, loc, rid, qty:n, price, total, gold: eff - total, market: snapshotMarket() });
+    }
+
+    // sell
+    await client.query(
+      `UPDATE player_data
+          SET pending_gold_delta = pending_gold_delta + $1, updated_at = NOW()
+        WHERE user_id = $2`,
+      [total, req.user.uid]
+    );
+    market.stock[loc][rid] = (market.stock[loc][rid]|0) + n;
+    await client.query('COMMIT');
+    persistMarket();
+    return res.json({ ok:true, action, loc, rid, qty:n, price, total, gold: eff + total, market: snapshotMarket() });
+  } catch (e) {
+    await client.query('ROLLBACK').catch(()=>{});
+    console.error('trade error:', e);
+    return res.status(500).json({ error: 'db error' });
+  } finally {
+    client.release();
+  }
 });
 
 // ==================== VILLAGE FEED ====================
@@ -723,5 +824,6 @@ app.get('/api/leaderboard', async (_req, res) => {
 });
 
 initDb()
+  .then(() => loadMarket())
   .then(() => app.listen(PORT, () => console.log(`server listening on :${PORT}`)))
   .catch(e => { console.error('init failed', e); process.exit(1); });
