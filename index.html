@@ -1254,12 +1254,21 @@ if (loadSave() && P) {
 }
 renderCloudPanel();
 
+let leadersTicker = null;
+function startLeadersTicker() {
+  if (leadersTicker) return;
+  leadersTicker = setInterval(() => {
+    const el = $('tab-leaders');
+    if (!el || el.style.display === 'none') { clearInterval(leadersTicker); leadersTicker = null; return; }
+    fetchLeaderboard();
+  }, 8000);
+}
 document.querySelectorAll('.tab').forEach(t => {
   t.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
     t.classList.add('active');
     ['inv','map','quest','leaders'].forEach(k => $('tab-'+k).style.display = (k===t.dataset.tab?'block':'none'));
-    if (t.dataset.tab === 'leaders') { fetchLeaderboard(); }
+    if (t.dataset.tab === 'leaders') { fetchLeaderboard(); startLeadersTicker(); }
   });
 });
 
@@ -1327,6 +1336,8 @@ async function cloudSync() {
     });
     if (r.status === 401) { authClear(); renderCloudPanel(); throw new Error('сессия истекла'); }
     if (!r.ok) { const j = await r.json().catch(()=>({})); throw new Error(j.error || 'save failed'); }
+    const lb = $('tab-leaders');
+    if (lb && lb.style.display !== 'none') fetchLeaderboard();
   } finally { cloudPushing = false; }
 }
 async function cloudFetch() {
