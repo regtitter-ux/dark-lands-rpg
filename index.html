@@ -395,6 +395,41 @@
     font-size: 11px; text-align: center; margin-top: 8px;
     min-height: 14px; font-style: italic;
   }
+  .lb-table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:11px; }
+  .lb-table th, .lb-table td { padding:5px 2px; text-align:center; vertical-align:middle; }
+  .lb-h {
+    font-size:10px; color:#8b6f47; font-weight:normal;
+    text-transform:uppercase; letter-spacing:0.5px;
+    padding:2px 2px 6px!important;
+    border-bottom:1px solid rgba(139,111,71,0.5);
+  }
+  .lb-row { border-bottom:1px solid rgba(74,40,24,0.4); transition:background 0.12s; }
+  .lb-row:hover { background:rgba(244,208,63,0.06); }
+  .lb-row.me { background:rgba(244,208,63,0.12); box-shadow:inset 2px 0 0 #f4d03f; }
+  .lb-rank {
+    font-weight:bold; font-size:12px; color:#8b6f47;
+    font-variant-numeric:tabular-nums;
+  }
+  .lb-row.top1 .lb-rank { color:#f4d03f; text-shadow:0 0 6px rgba(244,208,63,0.7); }
+  .lb-row.top2 .lb-rank { color:#d8d8d8; text-shadow:0 0 4px rgba(200,200,200,0.5); }
+  .lb-row.top3 .lb-rank { color:#cd7f32; text-shadow:0 0 4px rgba(205,127,50,0.5); }
+  .lb-hero {
+    text-align:left!important; padding-left:5px!important;
+    overflow:hidden;
+  }
+  .lb-nick {
+    font-weight:bold; font-size:11px; line-height:1.2;
+    word-break:break-word; color:#d4b87a;
+  }
+  .lb-row.me .lb-nick { color:#f4d03f; }
+  .lb-cls {
+    font-size:9px; color:#6b4423; font-style:italic;
+    line-height:1.1; margin-top:1px;
+  }
+  .lb-num { font-variant-numeric:tabular-nums; color:#c9ad72; }
+  .lb-num.gold { color:#f4d03f; }
+  .lb-num.pvp { color:#cf4030; }
+  .lb-num.zero { color:#5a3a20; }
 </style>
 </head>
 <body>
@@ -467,7 +502,7 @@
         <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Завершённые</h3><div class="body" id="done-body" style="font-size:11px"></div></div>
       </div>
       <div id="tab-leaders" style="display:none">
-        <div class="panel"><h3><img class="gi" src="assets/icons/star-formation.svg" alt=""> Топ-50 героев</h3><div class="body" id="leaders-body" style="font-size:12px">загрузка...</div></div>
+        <div class="panel"><h3><img class="gi" src="assets/icons/star-formation.svg" alt=""> Топ-50 героев</h3><div class="body" id="leaders-body" style="font-size:12px;padding:8px 6px">загрузка...</div></div>
       </div>
     </div>
   </div>
@@ -1471,6 +1506,7 @@ async function doLogout() {
   try { localStorage.removeItem(SAVE_KEY); } catch {}
   location.reload();
 }
+const CLS_SHORT = { warrior:'воин', mage:'маг', rogue:'плут' };
 async function fetchLeaderboard() {
   const el = $('leaders-body');
   try {
@@ -1478,27 +1514,45 @@ async function fetchLeaderboard() {
     const list = await r.json();
     if (!Array.isArray(list) || !list.length) { el.innerHTML = '<div style="color:#6b4423;font-style:italic">пока никого</div>'; return; }
     const myNick = cloudNick();
+    const fmtGold = g => { const n = g|0; return n >= 10000 ? Math.floor(n/1000)+'k' : String(n); };
+    const z = n => (n|0) === 0 ? ' zero' : '';
     const rows = list.map((row,i) => {
       const me = myNick && row.nick.toLowerCase()===myNick.toLowerCase();
-      return `<tr style="${me?'background:rgba(244,208,63,0.12)':''}">
-        <td style="padding:3px 6px;color:#8b6f47">${i+1}</td>
-        <td style="padding:3px 6px;color:${me?'#f4d03f':'#d4b87a'}"><b>${escapeHtml(row.nick)}</b>${row.cls?` <span style="color:#6b4423;font-size:10px">(${row.cls})</span>`:''}</td>
-        <td style="padding:3px 6px;text-align:right">${row.lvl}</td>
-        <td style="padding:3px 6px;text-align:right">${row.stage_max}</td>
-        <td style="padding:3px 6px;text-align:right;color:#f4d03f">${row.gold}</td>
-        <td style="padding:3px 6px;text-align:right">${row.bosses}</td>
-        <td style="padding:3px 6px;text-align:right;color:#cf4030">${row.pvp_kills|0}</td>
+      const rank = i+1;
+      const topCls = rank===1?' top1':rank===2?' top2':rank===3?' top3':'';
+      const cls = row.cls ? (CLS_SHORT[row.cls] || row.cls) : '';
+      const bosses = row.bosses|0, pvp = row.pvp_kills|0;
+      return `<tr class="lb-row${me?' me':''}${topCls}">
+        <td class="lb-rank">${rank}</td>
+        <td class="lb-hero">
+          <div class="lb-nick">${escapeHtml(row.nick)}</div>
+          ${cls?`<div class="lb-cls">${cls}</div>`:''}
+        </td>
+        <td class="lb-num">${row.lvl}</td>
+        <td class="lb-num">${row.stage_max}</td>
+        <td class="lb-num gold${z(row.gold)}">${fmtGold(row.gold)}</td>
+        <td class="lb-num${z(bosses)}">${bosses}</td>
+        <td class="lb-num pvp${z(pvp)}">${pvp}</td>
       </tr>`;
     }).join('');
-    el.innerHTML = `<table style="width:100%;border-collapse:collapse">
-      <thead><tr style="color:#8b6f47;border-bottom:1px solid #4a2818;font-size:11px">
-        <th style="text-align:left;padding:3px 6px">#</th>
-        <th style="text-align:left;padding:3px 6px">Герой</th>
-        <th style="text-align:right;padding:3px 6px">Ур.</th>
-        <th style="text-align:right;padding:3px 6px">Этап</th>
-        <th style="text-align:right;padding:3px 6px">Золото</th>
-        <th style="text-align:right;padding:3px 6px">Боссы</th>
-        <th style="text-align:right;padding:3px 6px" title="Убийств на арене">PvP</th>
+    el.innerHTML = `<table class="lb-table">
+      <colgroup>
+        <col style="width:20px">
+        <col>
+        <col style="width:22px">
+        <col style="width:24px">
+        <col style="width:38px">
+        <col style="width:24px">
+        <col style="width:26px">
+      </colgroup>
+      <thead><tr>
+        <th class="lb-h">#</th>
+        <th class="lb-h" style="text-align:left;padding-left:5px!important">Герой</th>
+        <th class="lb-h" title="Уровень">Ур</th>
+        <th class="lb-h" title="Максимальный этап">Эт</th>
+        <th class="lb-h" title="Золото">Зол</th>
+        <th class="lb-h" title="Убитых боссов">Бос</th>
+        <th class="lb-h" title="Убийств на арене">PvP</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
@@ -2052,7 +2106,6 @@ function renderActions() {
       <button class="act" onclick="attack()"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Атаковать</button>
       ${pvpMode ? '' : `<button class="act" onclick="flee()"><img class="gi" src="assets/icons/run.svg" alt=""> Бежать</button>`}
       ${leaveBtn}
-      <button class="act" onclick="document.querySelector('[data-tab=inv]').click()"><img class="gi" src="assets/icons/knapsack.svg" alt=""> Сумка</button>
     `; return;
   }
   const loc = LOCATIONS[P.location];
