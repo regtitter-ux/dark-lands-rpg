@@ -1454,8 +1454,16 @@ function renderAuthIndicator() {
     ind.innerHTML = `● <b style="color:#f4d03f">${escapeHtml(user)}</b> <a href="#" onclick="doLogout();return false;" style="color:#8b6f47">[выйти]</a>`;
   } else {
     ind.style.color = '#6b4423';
-    ind.textContent = '○ оффлайн';
+    ind.innerHTML = `○ оффлайн <a href="#" onclick="openReLogin();return false;" style="color:#8b6f47">[войти]</a>`;
   }
+}
+function openReLogin() {
+  const modal = $('start-modal'); if (!modal) return;
+  const classes = modal.querySelector('.classes'); if (classes) classes.style.display = P ? 'none' : '';
+  const hints = modal.querySelectorAll('p');
+  hints.forEach(p => { if (P) p.style.display = 'none'; });
+  renderCloudPanel();
+  modal.classList.add('show');
 }
 function renderCloudPanel() {
   renderAuthIndicator();
@@ -1518,7 +1526,7 @@ async function doAuthLogin() {
       log(`<span class="good">Вход: ${escapeHtml(u)}. Прогресс загружен из облака.</span>`);
     } else {
       log(`<span class="good">Вход: ${escapeHtml(u)}.</span>`);
-      if (P) await cloudSync().catch(()=>{});
+      if (P) { await cloudSync().catch(()=>{}); $('start-modal').classList.remove('show'); }
     }
     renderCloudPanel(); fetchLeaderboard();
   } catch (e) { msg.style.color='#cf4030'; msg.textContent = e.message; }

@@ -9,7 +9,7 @@ const { Pool } = pg;
 
 const PORT = process.env.PORT || 3000;
 const DATABASE_URL = process.env.DATABASE_URL;
-const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(48).toString('hex');
+let JWT_SECRET = process.env.JWT_SECRET || null;
 const TOKEN_TTL = '30d';
 
 if (!DATABASE_URL) {
@@ -51,6 +51,27 @@ async function initDb() {
     CREATE INDEX IF NOT EXISTS player_data_leaderboard
       ON player_data (lvl DESC, stage_max DESC, gold DESC, bosses DESC);
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `);
+  if (!JWT_SECRET) {
+    const r = await pool.query(`SELECT value FROM app_meta WHERE key = 'jwt_secret'`);
+    if (r.rowCount) {
+      JWT_SECRET = r.rows[0].value;
+    } else {
+      JWT_SECRET = crypto.randomBytes(48).toString('hex');
+      await pool.query(
+        `INSERT INTO app_meta (key, value) VALUES ('jwt_secret', $1)
+         ON CONFLICT (key) DO NOTHING`,
+        [JWT_SECRET]
+      );
+      const r2 = await pool.query(`SELECT value FROM app_meta WHERE key = 'jwt_secret'`);
+      JWT_SECRET = r2.rows[0].value;
+    }
+  }
 }
 
 const app = express();
