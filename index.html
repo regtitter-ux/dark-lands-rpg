@@ -481,7 +481,7 @@
   </footer>
 </div>
 
-<div class="modal-bg show" id="start-modal">
+<div class="modal-bg show" id="start-modal" onclick="if(event.target===this&&P)closeStartModal()">
   <div class="modal">
     <h2><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Добро пожаловать, странник <img class="gi" src="assets/icons/crossed-swords.svg" alt=""></h2>
     <p>Сумрачные Земли ждут нового героя. Назови себя и выбери свой путь.</p>
@@ -1499,13 +1499,16 @@ function renderCloudPanel() {
       <div class="auth-msg" id="cloud-msg" style="color:#cf4030"></div>`;
     return;
   }
+  const continueBtn = P ? `<button class="auth-btn" onclick="closeStartModal()">Продолжить</button>` : '';
   el.innerHTML = `
     <div class="auth-account">Добро пожаловать, <b>${escapeHtml(user)}</b> <span style="color:#6abe30">● авто-синк</span></div>
     <div class="auth-actions">
+      ${continueBtn}
       <button class="auth-btn ghost" onclick="doLogout()">Сменить аккаунт</button>
     </div>
     <div class="auth-msg" id="cloud-msg" style="color:#6abe30"></div>`;
 }
+function closeStartModal() { $('start-modal').classList.remove('show'); }
 async function doAuthRegister() {
   const msg = document.getElementById('cloud-msg');
   const u = (document.getElementById('auth-user').value||'').trim();
