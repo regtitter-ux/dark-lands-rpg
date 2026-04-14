@@ -1043,7 +1043,7 @@ const QUESTS = {
 };
 
 // ==================== СОСТОЯНИЕ ====================
-let P = null, Es = [], target = 0, inCombat = false, pvpMode = false;
+let P = null, Es = [], target = 0, inCombat = false, pvpMode = false, onArena = false;
 let combatTick = null, lastRegen = 0;
 let unlocked = ['village','forest'];
 let logHistory = [];
@@ -1394,7 +1394,7 @@ function applyCloudSave(j) {
   if (typeof j.gold === 'number') P.gold = j.gold|0;
   if (typeof j.pvp_kills === 'number') P.pvp_kills = j.pvp_kills|0;
   unlocked = j.save_blob.unlocked || ['village','forest'];
-  Es = []; target = 0; inCombat = false; pvpMode = false;
+  Es = []; target = 0; inCombat = false; pvpMode = false; onArena = false;
   if (P && !P.stages) P.stages = Object.fromEntries(Object.keys(LOCATIONS).map(k=>[k,1]));
   if (P && P.stages) { for (const k of Object.keys(LOCATIONS)) if (!P.stages[k]) P.stages[k]=1; }
   migrateEquipment();
@@ -2006,10 +2006,17 @@ function renderActions() {
   const loc = LOCATIONS[P.location];
   const btns = [];
   if (loc.actions.includes('hunt')) btns.push(`<button class="act" onclick="hunt()"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Искать врагов</button>`);
-  if (loc.actions.includes('arena')) btns.push(`<button class="act" onclick="arena()"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Круговая арена</button>`);
   if (loc.actions.includes('rest')) btns.push(`<button class="act" onclick="rest()"><img class="gi" src="assets/icons/sleepy.svg" alt=""> Отдохнуть</button>`);
   if (loc.actions.includes('shop')) btns.push(`<button class="act" onclick="openShop()"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Лавка</button>`);
   if (loc.actions.includes('inn'))  btns.push(`<button class="act" onclick="inn()"><img class="gi" src="assets/icons/beer-stein.svg" alt=""> Трактир</button>`);
+  if (loc.actions.includes('arena')) {
+    if (onArena) {
+      btns.push(`<button class="act" onclick="arena()"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Искать соперников</button>`);
+      btns.push(`<button class="act" onclick="leaveArena()"><img class="gi" src="assets/icons/run.svg" alt=""> Покинуть арену</button>`);
+    } else {
+      btns.push(`<button class="act" onclick="arena()"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Круговая арена</button>`);
+    }
+  }
   el.innerHTML = btns.join('');
 }
 
@@ -2437,15 +2444,18 @@ function stopArenaHeartbeat() {
 }
 async function leaveArena(silent=false) {
   stopArenaHeartbeat();
+  const wasOnArena = onArena;
+  onArena = false;
   const tok = authToken();
-  if (!tok) return;
-  try {
-    await fetch(API_BASE+'/api/arena/leave', {
-      method:'POST',
-      headers:{'Authorization':'Bearer '+tok}
-    });
-  } catch {}
-  if (!silent && pvpMode) {
+  if (tok) {
+    try {
+      await fetch(API_BASE+'/api/arena/leave', {
+        method:'POST',
+        headers:{'Authorization':'Bearer '+tok}
+      });
+    } catch {}
+  }
+  if (!silent && (pvpMode || wasOnArena)) {
     log(`<span class="info">Ты покидаешь Круговую арену.</span>`);
     stopCombatLoop(); inCombat=false; pvpMode=false; Es=[]; target=0;
     render();
@@ -2460,6 +2470,16 @@ function leaveArenaBeacon() {
 }
 window.addEventListener('pagehide', leaveArenaBeacon);
 window.addEventListener('beforeunload', leaveArenaBeacon);
+function startArenaHeartbeat() {
+  stopArenaHeartbeat();
+  arenaHeartbeat = setInterval(() => {
+    if (!onArena) { stopArenaHeartbeat(); return; }
+    fetch(API_BASE+'/api/arena/heartbeat', {
+      method:'POST',
+      headers:{'Authorization':'Bearer '+authToken()}
+    }).catch(()=>{});
+  }, 10000);
+}
 async function arena() {
   if (inCombat) return;
   if (!authToken()) { log(`<span class="bad">Чтобы выйти на арену, нужно войти в аккаунт.</span>`); return; }
@@ -2476,11 +2496,13 @@ async function arena() {
     log(`<span class="bad">Арена недоступна: ${escapeHtml(e.message)}.</span>`);
     return;
   }
+  onArena = true;
+  startArenaHeartbeat();
   hr();
   log(`<span class="sys"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> — Круговая арена —</span>`);
   if (!list.length) {
     log(`<span class="info">Арена пуста — ты здесь один. Жди соперников или загляни позже.</span>`);
-    await leaveArena(true);
+    render();
     return;
   }
   Es = list.slice(0, 6).map(buildArenaEnemy);
@@ -2490,14 +2512,6 @@ async function arena() {
   inCombat = true;
   startCombatLoop();
   log(`<span class="bad">Все против всех! Соперники: ${Es.map(e=>e.name).join(', ')}.</span>`);
-  stopArenaHeartbeat();
-  arenaHeartbeat = setInterval(() => {
-    if (!pvpMode) { stopArenaHeartbeat(); return; }
-    fetch(API_BASE+'/api/arena/heartbeat', {
-      method:'POST',
-      headers:{'Authorization':'Bearer '+authToken()}
-    }).catch(()=>{});
-  }, 10000);
   render();
 }
 async function resolveArenaFight(targetId, won) {
@@ -2790,8 +2804,7 @@ function cascadeOverflow(pool) {
 function winFight() {
   if (pvpMode) {
     hr();
-    log(`<span class="epic"><img class="gi" src="assets/icons/star-formation.svg" alt=""> Арена зачищена!</span>`);
-    leaveArena(true);
+    log(`<span class="epic"><img class="gi" src="assets/icons/star-formation.svg" alt=""> Арена зачищена! Ты остаёшься на арене — можно звать новых соперников или покинуть её.</span>`);
     stopCombatLoop(); inCombat=false; pvpMode=false; Es=[]; target=0;
     render();
     return;
