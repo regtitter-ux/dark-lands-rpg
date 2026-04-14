@@ -60,7 +60,8 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 app.post('/api/register', async (req, res) => {
   const nick = String(req.body?.nick || '').trim().slice(0, 24);
   if (!nick || nick.length < 2) return res.status(400).json({ error: 'nick must be 2-24 chars' });
-  if (!/^[\p{L}\p{N}_-]+$/u.test(nick)) return res.status(400).json({ error: 'invalid characters in nick' });
+  if (!/^[\p{L}\p{N}_\- .']+$/u.test(nick)) return res.status(400).json({ error: 'invalid characters in nick' });
+  if (/\s{2,}/.test(nick)) return res.status(400).json({ error: 'no double spaces' });
   const uuid = crypto.randomUUID();
   try {
     await pool.query(
