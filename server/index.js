@@ -357,57 +357,108 @@ const FEED_KILL = [
 ];
 function pickTpl(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
-// ==================== PVP ARENA ====================
-const arena = new Map(); // userId -> { username, cls, lvl, gold, pvp_kills, hp_max, lastSeen }
-const ARENA_TIMEOUT_MS = 30000;
+// ==================== PVP ARENA (server-authoritative real-time) ====================
+const arena = new Map(); // userId -> combat state
+const ARENA_TIMEOUT_MS = 15000;
+const ATTACK_CD_MS = 1200;
+const DEFEND_DUR_MS = 1500;
+const DEFEND_CD_MS = 3000;
+const REGEN_TICK_MS = 2500;
+const CORPSE_LINGER_MS = 4000;
+
 function arenaPrune() {
   const now = Date.now();
-  for (const [id, p] of arena) if (now - p.lastSeen > ARENA_TIMEOUT_MS) arena.delete(id);
+  for (const [id, p] of arena) {
+    if (p.dead && now - p.deathAt > CORPSE_LINGER_MS) { arena.delete(id); continue; }
+    if (!p.dead && now - p.lastSeen > ARENA_TIMEOUT_MS) {
+      arena.delete(id);
+      emitFeed(pickTpl(FEED_LEAVE)(p.username), id);
+    }
+  }
+}
+function tickRegen(p, now) {
+  if (p.dead) return;
+  if (now - p.lastRegen < REGEN_TICK_MS) return;
+  const steps = Math.floor((now - p.lastRegen) / REGEN_TICK_MS);
+  p.lastRegen += steps * REGEN_TICK_MS;
+  p.hp = Math.min(p.hpMax, p.hp + steps * Math.max(1, Math.round(p.hpMax * 0.02)));
+  p.mp = Math.min(p.mpMax, p.mp + steps * Math.max(1, Math.round(p.mpMax * 0.05)));
 }
 function arenaListFor(uid) {
   arenaPrune();
+  const now = Date.now();
   const list = [];
   for (const [id, p] of arena) {
     if (id === uid) continue;
-    list.push({ id, username: p.username, cls: p.cls, lvl: p.lvl, gold: p.gold, pvp_kills: p.pvp_kills, hp_max: p.hp_max });
+    tickRegen(p, now);
+    list.push({
+      id, username: p.username, cls: p.cls, lvl: p.lvl,
+      hp: p.hp, hpMax: p.hpMax,
+      dead: !!p.dead,
+      defending: p.defendUntil > now,
+    });
   }
   return list;
+}
+function sanitizeStats(s) {
+  const clamp = (v, lo, hi, d) => {
+    const n = Number(v); if (!Number.isFinite(n)) return d;
+    return Math.max(lo, Math.min(hi, n));
+  };
+  const wd = Array.isArray(s?.wdmg) ? s.wdmg : [4, 8];
+  return {
+    hpMax: clamp(s?.hpMax, 30, 5000, 80)|0,
+    mpMax: clamp(s?.mpMax, 0, 2000, 30)|0,
+    str:   clamp(s?.str,   0, 2000, 5)|0,
+    agi:   clamp(s?.agi,   0, 2000, 5)|0,
+    int_:  clamp(s?.int_ ?? s?.int, 0, 2000, 5)|0,
+    armor: clamp(s?.armor, 0, 2000, 0)|0,
+    crit:  clamp(s?.crit,  0, 0.8, 0.05),
+    wdmg:  [ clamp(wd[0], 1, 9999, 4)|0, clamp(wd[1], 1, 9999, 8)|0 ].sort((a,b)=>a-b),
+  };
+}
+
+async function loadPlayerBase(uid) {
+  const r = await pool.query(
+    `SELECT u.username, p.cls, p.lvl, p.pvp_kills
+     FROM users u JOIN player_data p ON p.user_id = u.id
+     WHERE u.id = $1`,
+    [uid]
+  );
+  return r.rowCount ? r.rows[0] : null;
 }
 
 app.post('/api/arena/enter', auth, async (req, res) => {
   try {
-    const r = await pool.query(
-      `SELECT u.username, p.cls, p.lvl,
-              GREATEST(0, p.gold + p.pending_gold_delta) AS gold,
-              p.pvp_kills, p.save_blob
-       FROM users u JOIN player_data p ON p.user_id = u.id
-       WHERE u.id = $1`,
-      [req.user.uid]
-    );
-    if (!r.rowCount) return res.status(404).json({ error: 'not found' });
-    const row = r.rows[0];
-    const wasPresent = arena.has(req.user.uid);
+    const base = await loadPlayerBase(req.user.uid);
+    if (!base) return res.status(404).json({ error: 'not found' });
+    const stats = sanitizeStats(req.body?.stats || {});
+    const now = Date.now();
+    const wasPresent = arena.has(req.user.uid) && !arena.get(req.user.uid).dead;
     arena.set(req.user.uid, {
-      username: row.username,
-      cls: row.cls,
-      lvl: row.lvl|0,
-      gold: row.gold|0,
-      pvp_kills: row.pvp_kills|0,
-      hp_max: (row.save_blob && row.save_blob.P && (row.save_blob.P.hpMax|0)) || null,
-      lastSeen: Date.now(),
+      username: base.username, cls: base.cls, lvl: base.lvl|0,
+      hpMax: stats.hpMax, hp: stats.hpMax,
+      mpMax: stats.mpMax, mp: stats.mpMax,
+      str: stats.str, agi: stats.agi, int_: stats.int_,
+      armor: stats.armor, crit: stats.crit, wdmg: stats.wdmg,
+      defendUntil: 0, lastAttack: 0, lastDefend: 0,
+      lastRegen: now, lastSeen: now,
+      dead: false, killedBy: null, deathAt: 0,
+      pvp_kills: base.pvp_kills|0,
     });
-    if (!wasPresent) emitFeed(pickTpl(FEED_ENTER)(row.username), req.user.uid);
-    res.json({ ok: true, players: arenaListFor(req.user.uid) });
+    if (!wasPresent) emitFeed(pickTpl(FEED_ENTER)(base.username), req.user.uid);
+    res.json({ ok: true });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'db error' });
+    console.error(e); res.status(500).json({ error: 'db error' });
   }
 });
 
 app.post('/api/arena/leave', auth, (req, res) => {
   const p = arena.get(req.user.uid);
-  arena.delete(req.user.uid);
-  if (p) emitFeed(pickTpl(FEED_LEAVE)(p.username), req.user.uid);
+  if (p) {
+    arena.delete(req.user.uid);
+    if (!p.dead) emitFeed(pickTpl(FEED_LEAVE)(p.username), req.user.uid);
+  }
   res.json({ ok: true });
 });
 
@@ -417,8 +468,10 @@ app.post('/api/arena/leave-beacon', (req, res) => {
     try {
       const u = jwt.verify(t, JWT_SECRET);
       const p = arena.get(u.uid);
-      arena.delete(u.uid);
-      if (p) emitFeed(pickTpl(FEED_LEAVE)(p.username), u.uid);
+      if (p) {
+        arena.delete(u.uid);
+        if (!p.dead) emitFeed(pickTpl(FEED_LEAVE)(p.username), u.uid);
+      }
     } catch {}
   }
   res.status(204).end();
@@ -433,66 +486,119 @@ app.get('/api/village/feed', auth, (req, res) => {
   res.json({ events, now: Date.now() });
 });
 
-app.post('/api/arena/heartbeat', auth, (req, res) => {
-  const p = arena.get(req.user.uid);
-  if (p) p.lastSeen = Date.now();
-  res.json({ ok: true, present: arena.has(req.user.uid), players: arenaListFor(req.user.uid) });
-});
-
-app.post('/api/arena/resolve', auth, async (req, res) => {
-  const targetId = parseInt(req.body?.target_id)|0;
-  const won = !!req.body?.won;
-  const me = req.user.uid;
-  if (!targetId || targetId === me) return res.status(400).json({ error: 'bad target' });
+async function resolveKill(winnerId, loserId) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const winnerId = won ? me : targetId;
-    const loserId  = won ? targetId : me;
     const lo = await client.query(
       `SELECT GREATEST(0, gold + pending_gold_delta) AS eff
        FROM player_data WHERE user_id = $1 FOR UPDATE`,
       [loserId]
     );
-    if (!lo.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'loser not found' }); }
+    if (!lo.rowCount) { await client.query('ROLLBACK'); return { transfer: 0 }; }
     const transfer = Math.floor((lo.rows[0].eff|0) * 0.05);
-    // Only non-caller accumulates pending; caller reconciles its own gold locally.
-    const pendingForLoser  = loserId  === me ? 0 : -transfer;
-    const pendingForWinner = winnerId === me ? 0 : +transfer;
     await client.query(
-      `UPDATE player_data SET pending_gold_delta = pending_gold_delta + $1, updated_at = NOW()
+      `UPDATE player_data SET pending_gold_delta = pending_gold_delta - $1, updated_at = NOW()
        WHERE user_id = $2`,
-      [pendingForLoser, loserId]
+      [transfer, loserId]
     );
     const w = await client.query(
       `UPDATE player_data SET pending_gold_delta = pending_gold_delta + $1,
            pvp_kills = pvp_kills + 1, updated_at = NOW()
-       WHERE user_id = $2
-       RETURNING pvp_kills`,
-      [pendingForWinner, winnerId]
+       WHERE user_id = $2 RETURNING pvp_kills`,
+      [transfer, winnerId]
     );
     await client.query('COMMIT');
-    // Kill feed (covered by the kill event, no separate leave)
     const winnerName = (arena.get(winnerId) || {}).username
-      || (await pool.query(`SELECT username FROM users WHERE id=$1`, [winnerId])).rows[0]?.username
-      || 'кто-то';
+      || (await pool.query(`SELECT username FROM users WHERE id=$1`, [winnerId])).rows[0]?.username || 'кто-то';
     const loserName  = (arena.get(loserId) || {}).username
-      || (await pool.query(`SELECT username FROM users WHERE id=$1`, [loserId])).rows[0]?.username
-      || 'кто-то';
+      || (await pool.query(`SELECT username FROM users WHERE id=$1`, [loserId])).rows[0]?.username || 'кто-то';
     emitFeed(pickTpl(FEED_KILL)(winnerName, loserName), winnerId, loserId);
-    arena.delete(loserId);
-    res.json({
-      ok: true, won, transfer,
-      gold_delta: won ? +transfer : -transfer,
-      pvp_kills: won ? (w.rows[0].pvp_kills|0) : null,
-    });
+    return { transfer, pvp_kills: w.rows[0]?.pvp_kills|0, winnerName, loserName };
   } catch (e) {
     await client.query('ROLLBACK').catch(()=>{});
     console.error(e);
-    res.status(500).json({ error: 'db error' });
+    return { transfer: 0, error: true };
   } finally {
     client.release();
   }
+}
+
+app.post('/api/arena/action', auth, async (req, res) => {
+  const me = req.user.uid;
+  const type = String(req.body?.type || '');
+  const now = Date.now();
+  const self = arena.get(me);
+  if (!self) return res.status(409).json({ error: 'not on arena' });
+  if (self.dead) return res.status(409).json({ error: 'dead', killedBy: self.killedBy });
+  self.lastSeen = now;
+  tickRegen(self, now);
+
+  if (type === 'leave') {
+    arena.delete(me);
+    emitFeed(pickTpl(FEED_LEAVE)(self.username), me);
+    return res.json({ ok: true, left: true });
+  }
+  if (type === 'defend') {
+    if (now - self.lastDefend < DEFEND_CD_MS) {
+      return res.json({ ok: false, reason: 'cd', cd_ms: DEFEND_CD_MS - (now - self.lastDefend) });
+    }
+    self.lastDefend = now;
+    self.defendUntil = now + DEFEND_DUR_MS;
+    return res.json({ ok: true, defendUntil: self.defendUntil });
+  }
+  if (type === 'attack') {
+    const tid = parseInt(req.body?.target_id)|0;
+    if (!tid || tid === me) return res.status(400).json({ error: 'bad target' });
+    const tgt = arena.get(tid);
+    if (!tgt || tgt.dead) return res.status(409).json({ error: 'target gone' });
+    if (now - self.lastAttack < ATTACK_CD_MS) {
+      return res.json({ ok: false, reason: 'cd', cd_ms: ATTACK_CD_MS - (now - self.lastAttack) });
+    }
+    self.lastAttack = now;
+    tickRegen(tgt, now);
+    const dodge = Math.min(0.35, tgt.agi * 0.012);
+    if (Math.random() < dodge) {
+      return res.json({ ok: true, attack: { dodged: true, target_id: tid } });
+    }
+    let dmg = Math.floor(rndF(self.wdmg[0], self.wdmg[1]) + self.str / 2);
+    const crit = Math.random() < self.crit;
+    if (crit) dmg = Math.floor(dmg * 1.7);
+    dmg = Math.max(1, dmg - Math.floor(tgt.armor / 2));
+    if (tgt.defendUntil > now) dmg = Math.max(1, Math.floor(dmg / 2));
+    tgt.hp = Math.max(0, tgt.hp - dmg);
+    let kill = null;
+    if (tgt.hp <= 0) {
+      tgt.dead = true;
+      tgt.killedBy = me;
+      tgt.deathAt = now;
+      const r = await resolveKill(me, tid);
+      self.pvp_kills = r.pvp_kills || self.pvp_kills;
+      kill = { target_id: tid, transfer: r.transfer|0, pvp_kills: self.pvp_kills };
+    }
+    return res.json({ ok: true, attack: { dmg, crit, target_id: tid, target_hp: tgt.hp, target_hpMax: tgt.hpMax, kill } });
+  }
+  return res.status(400).json({ error: 'bad action' });
+});
+
+app.get('/api/arena/state', auth, (req, res) => {
+  const me = req.user.uid;
+  const self = arena.get(me);
+  const now = Date.now();
+  if (self) { self.lastSeen = now; tickRegen(self, now); }
+  const meOut = self ? {
+    present: true,
+    hp: self.hp, hpMax: self.hpMax,
+    mp: self.mp, mpMax: self.mpMax,
+    dead: !!self.dead,
+    killedBy: self.killedBy,
+    defendUntil: self.defendUntil,
+    attackReadyAt: self.lastAttack + ATTACK_CD_MS,
+    defendReadyAt: self.lastDefend + DEFEND_CD_MS,
+    pvp_kills: self.pvp_kills,
+    username: self.username,
+  } : { present: false };
+  res.json({ me: meOut, players: arenaListFor(me), now });
 });
 
 app.get('/api/leaderboard', async (_req, res) => {

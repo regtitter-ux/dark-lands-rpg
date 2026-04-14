@@ -2415,30 +2415,119 @@ function generateStageGroup(loc, s) {
   return { group, bossStage };
 }
 
-function buildArenaEnemy(p) {
-  const lvl = Math.max(1, p.lvl|0);
-  const hp = Math.max(40, (p.hp_max|0) || (80 + lvl*14));
-  const d1 = 4 + Math.floor(lvl*1.8);
-  const d2 = 8 + Math.floor(lvl*2.6);
+// Arena: server-authoritative real-time PvP
+let arenaPoll = null;
+let arenaState = { me: { present: false }, players: [] };
+
+function computeArenaStats() {
+  const wd = eff('wdmg') || [4, 8];
   return {
-    id: 'pvp_'+p.id,
-    name: p.username + (p.cls?` (${p.cls})`:''),
-    ico: '<img class="gi" src="assets/icons/crossed-swords.svg" alt="">',
-    hp, hpMax: hp,
-    dmg: [d1, Math.max(d1+1, d2)],
-    xp: 0, gold: [0,0],
-    lvl, loc: ['village'],
-    _pvp: true, _pvpTargetId: p.id, _pvpUsername: p.username, _pvpResolved: false,
+    hpMax: eff('hpMax')|0,
+    mpMax: eff('mpMax')|0,
+    str: eff('str')|0,
+    agi: eff('agi')|0,
+    int_: eff('int')|0,
+    armor: eff('armor')|0,
+    crit: ((eff('crit')|0) / 100),
+    wdmg: [wd[0]|0, wd[1]|0],
   };
 }
-let arenaHeartbeat = null;
-function stopArenaHeartbeat() {
-  if (arenaHeartbeat) { clearInterval(arenaHeartbeat); arenaHeartbeat = null; }
+
+function arenaEntryFromPlayer(p) {
+  return {
+    id: 'pvp_'+p.id,
+    _pvp: true,
+    _pvpTargetId: p.id,
+    _pvpUsername: p.username,
+    name: p.username + (p.cls?` (${p.cls})`:''),
+    ico: '<img class="gi" src="assets/icons/crossed-swords.svg" alt="">',
+    hp: p.hp|0, hpMax: p.hpMax|0,
+    dmg: [0, 0], xp: 0, gold: [0, 0],
+    lvl: p.lvl|0, loc: ['village'],
+    _dead: !!p.dead, _defending: !!p.defending,
+  };
 }
-async function leaveArena(silent=false) {
-  stopArenaHeartbeat();
-  const wasOnArena = onArena;
+
+function syncEsFromArena(players) {
+  const byId = new Map(players.map(p => [p.id, p]));
+  const existing = Es.filter(e => e._pvp && byId.has(e._pvpTargetId));
+  const existingIds = new Set(existing.map(e => e._pvpTargetId));
+  for (const e of Es) {
+    if (e._pvp && !byId.has(e._pvpTargetId) && !e._leaveLogged) {
+      log(`<span class="info">${escapeHtml(e._pvpUsername)} покидает арену.</span>`);
+    }
+  }
+  for (const e of existing) {
+    const p = byId.get(e._pvpTargetId);
+    e.hp = p.hp|0; e.hpMax = p.hpMax|0;
+    e._dead = !!p.dead; e._defending = !!p.defending;
+    e.name = p.username + (p.cls?` (${p.cls})`:'');
+  }
+  const newcomers = players.filter(p => !existingIds.has(p.id));
+  for (const p of newcomers) {
+    existing.push(arenaEntryFromPlayer(p));
+    log(`<span class="bad">На арене появился ${escapeHtml(p.username)}!</span>`);
+  }
+  Es = existing;
+  if (target >= Es.length) target = 0;
+  ensureTarget();
+}
+
+async function pollArenaStateOnce() {
+  if (!onArena || !authToken()) return;
+  let j;
+  try {
+    const r = await fetch(API_BASE+'/api/arena/state', {
+      headers:{'Authorization':'Bearer '+authToken()}
+    });
+    if (!r.ok) return;
+    j = await r.json();
+  } catch { return; }
+  arenaState = j;
+  if (j.me && j.me.present === false) {
+    log(`<span class="bad">Ты больше не на арене.</span>`);
+    await leaveArenaLocal();
+    return;
+  }
+  if (j.me && j.me.dead) {
+    await onOwnArenaDeath(j.me.killedBy);
+    return;
+  }
+  if (P && pvpMode && j.me) {
+    P.hp = j.me.hp|0;
+    P.mp = j.me.mp|0;
+    if (j.me.defendUntil) P._defUntil = j.me.defendUntil;
+    if (typeof j.me.pvp_kills === 'number') P.pvp_kills = j.me.pvp_kills;
+  }
+  syncEsFromArena(j.players || []);
+  render();
+}
+function startArenaPoll() {
+  stopArenaPoll();
+  arenaPoll = setInterval(pollArenaStateOnce, 700);
+}
+function stopArenaPoll() {
+  if (arenaPoll) { clearInterval(arenaPoll); arenaPoll = null; }
+}
+
+async function onOwnArenaDeath(killerId) {
+  stopArenaPoll();
+  const killer = (arenaState.players||[]).find(p => p.id === killerId);
+  const name = killer ? killer.username : 'соперник';
+  log(`<span class="bad"><img class="gi" src="assets/icons/death-skull.svg" alt=""> Ты повержен на арене рукой ${escapeHtml(name)}. Опыт и этап не тронуты.</span>`);
+  P.hp = Math.floor(eff('hpMax')/2);
+  P.mp = Math.floor(eff('mpMax')/2);
+  await leaveArenaLocal();
+  cloudSync().catch(()=>{});
+}
+
+async function leaveArenaLocal() {
+  stopArenaPoll();
   onArena = false;
+  pvpMode = false;
+  stopCombatLoop();
+  inCombat = false;
+  Es = []; target = 0;
   const tok = authToken();
   if (tok) {
     try {
@@ -2448,12 +2537,15 @@ async function leaveArena(silent=false) {
       });
     } catch {}
   }
-  if (!silent && (pvpMode || wasOnArena)) {
-    log(`<span class="info">Ты покидаешь Круговую арену.</span>`);
-    stopCombatLoop(); inCombat=false; pvpMode=false; Es=[]; target=0;
-    render();
-  }
+  render();
 }
+
+async function leaveArena(silent=false) {
+  if (!onArena && !pvpMode) return;
+  if (!silent) log(`<span class="info">Ты покидаешь Круговую арену.</span>`);
+  await leaveArenaLocal();
+}
+
 function leaveArenaBeacon() {
   const tok = authToken();
   if (!tok) return;
@@ -2481,116 +2573,88 @@ setInterval(async () => {
     }
   } catch {}
 }, 3000);
-let arenaKilledSet = new Set();
-function arenaReconcile(list) {
-  if (!Es) Es = [];
-  const fresh = list.filter(p => !arenaKilledSet.has(p.id));
-  const presentIds = new Set(fresh.map(p => p.id));
-  for (const e of Es) {
-    if (e._pvp && e.hp > 0 && !presentIds.has(e._pvpTargetId)) {
-      log(`<span class="info">${escapeHtml(e.name)} покинул арену.</span>`);
-    }
-  }
-  const kept = Es.filter(e => e._pvp && e.hp > 0 && presentIds.has(e._pvpTargetId));
-  const keptIds = new Set(kept.map(e => e._pvpTargetId));
-  for (const p of fresh) {
-    if (keptIds.has(p.id)) continue;
-    const ne = buildArenaEnemy(p);
-    scheduleEnemy(ne, true);
-    kept.push(ne);
-    log(`<span class="bad">На арене появился ${escapeHtml(ne.name)}!</span>`);
-  }
-  Es = kept;
-  target = 0;
-  ensureTarget();
-  render();
-}
-async function refreshArenaRoster(afterVictory=false) {
-  let list = [];
-  try {
-    const r = await fetch(API_BASE+'/api/arena/heartbeat', {
-      method:'POST',
-      headers:{'Authorization':'Bearer '+authToken()}
-    });
-    const j = await r.json();
-    list = Array.isArray(j.players) ? j.players : [];
-  } catch {}
-  if (afterVictory) {
-    const fresh = list.filter(p => !arenaKilledSet.has(p.id));
-    Es = fresh.slice(0, 6).map(buildArenaEnemy);
-    for (const e of Es) scheduleEnemy(e, true);
-    target = 0;
-    if (!Es.length) log(`<span class="info">Арена пуста. Ждёшь новых соперников...</span>`);
-    else log(`<span class="bad">Новые соперники: ${Es.map(e=>escapeHtml(e.name)).join(', ')}.</span>`);
-    render();
-  } else {
-    arenaReconcile(list);
-  }
-}
-function startArenaHeartbeat() {
-  stopArenaHeartbeat();
-  arenaHeartbeat = setInterval(() => {
-    if (!onArena) { stopArenaHeartbeat(); return; }
-    refreshArenaRoster(false);
-  }, 3000);
-}
+
 async function arena() {
   if (inCombat) return;
   if (!authToken()) { log(`<span class="bad">Чтобы выйти на арену, нужно войти в аккаунт.</span>`); return; }
-  let list = [];
   try {
     const r = await fetch(API_BASE+'/api/arena/enter', {
       method:'POST',
-      headers:{'Authorization':'Bearer '+authToken()}
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken()},
+      body: JSON.stringify({ stats: computeArenaStats() })
     });
     if (!r.ok) throw new Error('HTTP '+r.status);
-    const j = await r.json();
-    list = Array.isArray(j.players) ? j.players : [];
+    await r.json();
   } catch (e) {
     log(`<span class="bad">Арена недоступна: ${escapeHtml(e.message)}.</span>`);
     return;
   }
   onArena = true;
-  arenaKilledSet = new Set();
-  startArenaHeartbeat();
-  hr();
-  log(`<span class="sys"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> — Круговая арена: бой не прекращается, пока ты здесь —</span>`);
-  Es = list.slice(0, 6).map(buildArenaEnemy);
-  for (const e of Es) scheduleEnemy(e, true);
-  target = 0;
   pvpMode = true;
   inCombat = true;
+  Es = []; target = 0;
+  hr();
+  log(`<span class="sys"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> — Круговая арена: живой PvP. Бой идёт до смерти или выхода. —</span>`);
   startCombatLoop();
-  if (Es.length) log(`<span class="bad">Соперники: ${Es.map(e=>escapeHtml(e.name)).join(', ')}.</span>`);
-  else log(`<span class="info">На арене ты пока один. Ждёшь соперников...</span>`);
+  startArenaPoll();
+  pollArenaStateOnce();
   render();
 }
-async function resolveArenaFight(targetId, won) {
+
+async function arenaAction(body) {
   try {
-    const r = await fetch(API_BASE+'/api/arena/resolve', {
+    const r = await fetch(API_BASE+'/api/arena/action', {
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken()},
-      body: JSON.stringify({ target_id: targetId, won: !!won })
+      body: JSON.stringify(body)
     });
     const j = await r.json().catch(()=>({}));
-    if (!r.ok || !j.ok) return null;
-    return j;
-  } catch { return null; }
+    return { ok: r.ok, j };
+  } catch { return { ok:false, j:{} }; }
 }
-async function onArenaEnemyDeath(e) {
-  if (e._pvpResolved || e._left) return;
-  e._pvpResolved = true;
-  arenaKilledSet.add(e._pvpTargetId);
-  const j = await resolveArenaFight(e._pvpTargetId, true);
-  if (!j) return;
-  const delta = j.gold_delta|0;
-  P.gold = Math.max(0, P.gold + delta);
-  if (typeof j.pvp_kills === 'number') P.pvp_kills = j.pvp_kills;
-  log(`<span class="good">Трофей с ${escapeHtml(e._pvpUsername)}: +${j.transfer} <img class="gi" src="assets/icons/two-coins.svg" alt="">. Убийств на арене: ${j.pvp_kills}.</span>`);
+
+async function arenaAttack() {
+  ensureTarget();
+  const e = Es[target];
+  if (!e || !e._pvp || e._dead) return;
+  const res = await arenaAction({ type:'attack', target_id: e._pvpTargetId });
+  if (!res.ok) {
+    if (res.j && res.j.error === 'target gone') {
+      log(`<span class="info">Соперник уже покинул арену.</span>`);
+      pollArenaStateOnce();
+    }
+    return;
+  }
+  const j = res.j;
+  if (j && j.ok === false && j.reason === 'cd') return;
+  const a = j && j.attack;
+  if (!a) return;
+  if (a.dodged) {
+    log(`<span class="info">${escapeHtml(e._pvpUsername)} уворачивается от твоего удара!</span>`);
+  } else {
+    log(a.crit
+      ? `<span class="epic"><img class="gi" src="assets/icons/star-formation.svg" alt=""> КРИТ! Ты бьёшь ${escapeHtml(e._pvpUsername)} за ${a.dmg} урона!</span>`
+      : `<span class="good">Ты бьёшь ${escapeHtml(e._pvpUsername)} за ${a.dmg} урона.</span>`);
+    e.hp = a.target_hp|0;
+  }
+  if (a.kill) {
+    e._dead = true; e.hp = 0;
+    log(`<span class="good"><img class="gi" src="assets/icons/star-formation.svg" alt=""> ${escapeHtml(e._pvpUsername)} повержен! Трофей: +${a.kill.transfer} <img class="gi" src="assets/icons/two-coins.svg" alt="">. Убийств: ${a.kill.pvp_kills}.</span>`);
+    P.gold = Math.max(0, P.gold + (a.kill.transfer|0));
+    P.pvp_kills = a.kill.pvp_kills|0;
+    cloudSync().catch(()=>{});
+    const lb = $('tab-leaders');
+    if (lb && lb.style.display !== 'none') fetchLeaderboard();
+  }
   render();
-  const lb = $('tab-leaders');
-  if (lb && lb.style.display !== 'none') fetchLeaderboard();
-  cloudSync().catch(()=>{});
+}
+
+async function arenaDefend() {
+  const res = await arenaAction({ type:'defend' });
+  if (!res.ok || !res.j || !res.j.ok) return;
+  P._defUntil = res.j.defendUntil;
+  log(`<span class="info">Ты поднимаешь щит (≈1.5 сек).</span>`);
+  render();
 }
 
 function hunt() {
@@ -2620,6 +2684,7 @@ function hunt() {
 
 function attack() {
   if (!inCombat) return;
+  if (pvpMode) { arenaAttack(); return; }
   ensureTarget();
   const e = Es[target]; if (!e || e.hp<=0) return;
   const wd = eff('wdmg');
@@ -2647,6 +2712,7 @@ function attack() {
 }
 function defend() {
   if (!inCombat) return;
+  if (pvpMode) { arenaDefend(); return; }
   P._defUntil = Date.now() + 2500;
   log(`<span class="info">Ты поднимаешь щит (≈2.5 сек).</span>`);
   finishPlayerTurn(true);
@@ -2655,6 +2721,7 @@ function spellMul(key) { return 1 + 0.2 * ((P.spellLvl && P.spellLvl[key]) || 0)
 function cast(key) {
   const s = SPELLS[key];
   if (P.mp<s.cost || !inCombat) return;
+  if (pvpMode) { log(`<span class="info">На арене заклинания недоступны — только клинок и щит.</span>`); return; }
   if (!P.spellCd) P.spellCd = {};
   if ((P.spellCd[key]||0) > Date.now()) return;
   P.spellCd[key] = Date.now() + 30000;
@@ -2711,7 +2778,6 @@ function finishPlayerTurn(skipDeathCheck=false) {
     if (Es[i].hp<=0 && !Es[i]._dead) {
       Es[i]._dead = true;
       log(`<span class="good"><img class="gi" src="assets/icons/star-formation.svg" alt=""> ${Es[i].name} повержен!</span>`);
-      if (Es[i]._pvp) onArenaEnemyDeath(Es[i]);
     }
   }
   if (!aliveIdx().length) { winFight(); return; }
@@ -2742,6 +2808,10 @@ let cdTick = setInterval(() => {
 function combatTickFn() {
   if (!inCombat) { stopCombatLoop(); return; }
   const now = Date.now();
+  if (pvpMode) {
+    if (P._defUntil && now > P._defUntil) { P._defUntil = 0; render(); }
+    return;
+  }
   if (P.spellCd && Object.values(P.spellCd).some(t => t > now && t - now < 30200)) renderSpells();
   let changed = false;
   for (let i=0;i<Es.length;i++) {
@@ -2854,11 +2924,7 @@ function cascadeOverflow(pool) {
 }
 
 function winFight() {
-  if (pvpMode) {
-    log(`<span class="good">Соперники повержены. Бой на арене продолжается — ищем новых...</span>`);
-    refreshArenaRoster(true);
-    return;
-  }
+  if (pvpMode) return;
   awardKillsLoot(Es);
   const loc = P.location;
   P.stages[loc] = (P.stages[loc]||1) + 1;
@@ -2896,28 +2962,7 @@ document.addEventListener('keydown', e => {
 });
 function die() {
   hr();
-  if (pvpMode) {
-    const attacker = Es.find(e => e._pvp && e.hp > 0) || Es.find(e => e._pvp);
-    if (attacker) {
-      (async () => {
-        const j = await resolveArenaFight(attacker._pvpTargetId, false);
-        if (j) {
-          const delta = j.gold_delta|0;
-          P.gold = Math.max(0, P.gold + delta);
-          log(`<span class="bad">${escapeHtml(attacker._pvpUsername)} забирает ${j.transfer} <img class="gi" src="assets/icons/two-coins.svg" alt=""> с твоего кошелька.</span>`);
-          render();
-          cloudSync().catch(()=>{});
-        }
-      })();
-    }
-    P.hp = Math.floor(eff('hpMax')/2);
-    P.mp = Math.floor(eff('mpMax')/2);
-    log(`<span class="bad"><img class="gi" src="assets/icons/death-skull.svg" alt=""> Ты повержен на арене. Опыт и этап остались нетронутыми.</span>`);
-    leaveArena(true);
-    stopCombatLoop(); inCombat=false; pvpMode=false; Es=[]; target=0;
-    render();
-    return;
-  }
+  if (pvpMode) return; // arena death is handled by state poll (onOwnArenaDeath)
   const loc = P.location;
   const oldStage = P.stages[loc]||1;
   const newStage = Math.max(1, oldStage-3);
