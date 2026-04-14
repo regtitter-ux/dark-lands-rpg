@@ -664,73 +664,42 @@ const EVENT_TEMPLATES = [
   { kind:'down', mul:[0.4,0.6], text: (t,r) => `${t.name} получил долг ${r.name.toLowerCase()}ом — ему бы скинуть лишнее.` }
 ];
 const MARKET_PERIOD_MS = 60000;
-function rndF(a,b){ return a + Math.random()*(b-a); }
-function ensureStock() {
-  if (!P || !P.market) return;
-  if (!P.market.stock) P.market.stock = {};
-  for (const locId of Object.keys(LOCATIONS)) {
-    if (!P.market.stock[locId]) P.market.stock[locId] = {};
-    for (const rid of RESOURCE_IDS) {
-      if (typeof P.market.stock[locId][rid] !== 'number') P.market.stock[locId][rid] = 0;
-    }
-  }
+const MARKET = { prices:{}, stock:{}, news:[], nextAt:0 };
+let marketFetching = null;
+async function fetchMarket() {
+  if (marketFetching) return marketFetching;
+  marketFetching = (async () => {
+    try {
+      const r = await fetch(API_BASE + '/api/market');
+      if (!r.ok) throw new Error('market fetch failed');
+      const j = await r.json();
+      MARKET.prices = j.prices || {}; MARKET.stock = j.stock || {};
+      MARKET.news = j.news || []; MARKET.nextAt = j.nextAt || 0;
+      return j;
+    } finally { marketFetching = null; }
+  })();
+  return marketFetching;
+}
+function applyMarketSnapshot(m) {
+  if (!m) return;
+  MARKET.prices = m.prices || {}; MARKET.stock = m.stock || {};
+  MARKET.news = m.news || []; MARKET.nextAt = m.nextAt || 0;
 }
 function traderStock(locId, rid) {
-  ensureStock();
-  return (P.market.stock[locId] && P.market.stock[locId][rid]) || 0;
-}
-function regenMarket() {
-  if (!P) return;
-  if (!P.market) P.market = { prices:{}, seen:{}, nextAt:0, news:[], stock:{} };
-  ensureStock();
-  const prices = {}, news = [];
-  for (const locId of Object.keys(LOCATIONS)) {
-    prices[locId] = {};
-    for (const rid of RESOURCE_IDS) {
-      const base = ITEMS[rid].base;
-      prices[locId][rid] = Math.max(1, Math.round(base * rndF(0.85, 1.15)));
-    }
-  }
-  const locIds = Object.keys(LOCATIONS);
-  const eventCount = 2 + Math.floor(Math.random()*2);
-  const usedPairs = new Set();
-  for (let i=0;i<eventCount;i++) {
-    const tpl = EVENT_TEMPLATES[Math.floor(Math.random()*EVENT_TEMPLATES.length)];
-    let locId, rid, key;
-    for (let tries=0;tries<12;tries++) {
-      locId = locIds[Math.floor(Math.random()*locIds.length)];
-      rid = RESOURCE_IDS[Math.floor(Math.random()*RESOURCE_IDS.length)];
-      key = locId+':'+rid;
-      if (!usedPairs.has(key)) break;
-    }
-    if (usedPairs.has(key)) continue;
-    usedPairs.add(key);
-    const base = ITEMS[rid].base;
-    const mul = rndF(tpl.mul[0], tpl.mul[1]);
-    prices[locId][rid] = Math.max(1, Math.round(base * mul));
-    news.push({
-      loc:locId, res:rid, kind:tpl.kind,
-      text: tpl.text(TRADERS[locId], ITEMS[rid])
-    });
-  }
-  P.market.prices = prices;
-  P.market.news = news;
-  P.market.nextAt = Date.now() + MARKET_PERIOD_MS;
-}
-function ensureMarket() {
-  if (!P.market || !P.market.prices || Date.now() >= (P.market.nextAt||0)) regenMarket();
-  ensureStock();
+  return (MARKET.stock[locId] && MARKET.stock[locId][rid]) || 0;
 }
 function marketPrice(locId, rid) {
-  ensureMarket();
-  return (P.market.prices[locId] && P.market.prices[locId][rid]) || ITEMS[rid].base;
+  return (MARKET.prices[locId] && MARKET.prices[locId][rid]) || ITEMS[rid].base;
 }
 function noteSeen(locId) {
+  if (!P.market) P.market = {};
   if (!P.market.seen) P.market.seen = {};
   const now = Date.now();
   P.market.seen[locId] = {};
   for (const rid of RESOURCE_IDS) {
-    P.market.seen[locId][rid] = { price: marketPrice(locId, rid), at: now };
+    if (MARKET.prices[locId] && MARKET.prices[locId][rid]) {
+      P.market.seen[locId][rid] = { price: MARKET.prices[locId][rid], at: now };
+    }
   }
 }
 function formatTimer(ms) {
@@ -739,13 +708,19 @@ function formatTimer(ms) {
   return `${m}:${String(r).padStart(2,'0')}`;
 }
 function renderResourceGrid() {
-  ensureMarket();
-  noteSeen(P.location);
   const locId = P.location;
   const tr = TRADERS[locId];
   if (!tr) { $('shop-grid').innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#8b6f47;font-style:italic;padding:20px">здесь не торгуют ресурсами</div>'; return; }
+  if (!MARKET.prices[locId]) {
+    $('shop-grid').innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#8b6f47;font-style:italic;padding:20px">Связь с рынком...</div>';
+    fetchMarket().then(() => { if ($('shop-modal').classList.contains('show') && shopState.tab === 'resources') renderResourceGrid(); }).catch(()=>{
+      $('shop-grid').innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#cf4030;padding:20px">Рынок недоступен. Проверь соединение.</div>';
+    });
+    return;
+  }
+  noteSeen(locId);
   const loc = LOCATIONS[locId];
-  const prices = P.market.prices[locId];
+  const prices = MARKET.prices[locId];
   const rows = RESOURCE_IDS.map(rid => {
     const it = ITEMS[rid];
     const price = prices[rid];
@@ -782,15 +757,15 @@ function renderResourceGrid() {
       </td>
     </tr>`;
   }).join('');
-  const newsHtml = (P.market.news && P.market.news.length)
-    ? P.market.news.map(n => {
+  const newsHtml = (MARKET.news && MARKET.news.length)
+    ? MARKET.news.map(n => {
         const ico = n.kind==='up' ? '<img class="gi" src="assets/icons/lightning-bolt.svg" alt="">' : '<img class="gi" src="assets/icons/feather.svg" alt="">';
         const color = n.kind==='up' ? '#cf4030' : '#6abe30';
         return `<div style="color:#d4b87a;font-size:11px;padding:3px 0;border-left:3px solid ${color};padding-left:8px;margin:2px 0">${ico} ${n.text}</div>`;
       }).join('')
     : '<div style="color:#8b6f47;font-style:italic;font-size:11px">— рынки спокойны —</div>';
   const compareRows = Object.keys(LOCATIONS).filter(l => l!==locId).map(lid => {
-    const seen = P.market.seen && P.market.seen[lid];
+    const seen = P.market && P.market.seen && P.market.seen[lid];
     const trName = TRADERS[lid].name;
     const cells = RESOURCE_IDS.map(rid => {
       if (!seen || !seen[rid]) return `<td style="padding:3px 4px;text-align:center;color:#5a3820">—</td>`;
@@ -813,7 +788,8 @@ function renderResourceGrid() {
           <div style="color:#8b6f47;font-size:11px;font-style:italic">${tr.desc}</div>
         </div>
         <div style="text-align:right">
-          <div style="color:#5fb3d4;font-size:11px">до обновления цен: <b id="trader-timer">${formatTimer(P.market.nextAt - Date.now())}</b></div>
+          <div style="color:#5fb3d4;font-size:11px">до обновления цен: <b id="trader-timer">${formatTimer(MARKET.nextAt - Date.now())}</b></div>
+          <div style="color:#8b6f47;font-size:10px;margin-top:2px">Рынок общий — цены и запасы для всех игроков.</div>
         </div>
       </div>
       <div style="margin:8px 0;padding:6px;background:rgba(0,0,0,0.35);border:1px solid #4a2818">
@@ -824,7 +800,7 @@ function renderResourceGrid() {
         <thead><tr style="border-bottom:1px solid #4a2818;color:#8b6f47;font-size:11px">
           <th style="text-align:left;padding:4px">Ресурс</th>
           <th style="text-align:center;padding:4px">У тебя</th>
-          <th style="text-align:center;padding:4px" title="Запас у торговца — пополняется только продажами игрока">У торговца</th>
+          <th style="text-align:center;padding:4px" title="Общий запас у торговца — пополняется продажами всех игроков">У торговца</th>
           <th style="text-align:right;padding:4px">Цена</th>
           <th style="text-align:center;padding:4px">×</th>
           <th></th>
@@ -832,8 +808,8 @@ function renderResourceGrid() {
         <tbody>${rows}</tbody>
       </table>
       ${compareRows ? `
-        <details style="margin-top:10px" ${P.market.compareOpen?'open':''}>
-          <summary style="cursor:pointer;color:#5fb3d4;font-size:12px" onclick="setTimeout(()=>{P.market.compareOpen=this.parentElement.open;},0)">Цены в памяти (по другим торговцам)</summary>
+        <details style="margin-top:10px" ${P.market && P.market.compareOpen?'open':''}>
+          <summary style="cursor:pointer;color:#5fb3d4;font-size:12px" onclick="setTimeout(()=>{if(!P.market)P.market={};P.market.compareOpen=this.parentElement.open;},0)">Цены в памяти (по другим торговцам)</summary>
           <table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:11px">
             <thead><tr style="color:#8b6f47"><th style="text-align:left;padding:3px 6px">Торговец</th>${headerCells}</tr></thead>
             <tbody>${compareRows}</tbody>
@@ -844,20 +820,42 @@ function renderResourceGrid() {
     </div>
   `;
 }
-function tradeBuy(rid) {
-  const price = marketPrice(P.location, rid);
-  const stock = traderStock(P.location, rid);
-  if (stock <= 0) { log(`<span class="bad">У ${TRADERS[P.location].name} нет ${ITEMS[rid].name.toLowerCase()} на продажу.</span>`); return; }
+async function marketTradeCall(loc, rid, qty, action) {
+  const tok = authToken(); if (!tok) { log(`<span class="bad">Нужна авторизация для торговли.</span>`); return null; }
+  try {
+    const r = await fetch(API_BASE + '/api/market/trade', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+tok },
+      body: JSON.stringify({ loc, rid, qty, action })
+    });
+    const j = await r.json().catch(()=>({}));
+    if (j && j.market) applyMarketSnapshot(j.market);
+    if (!r.ok) {
+      if (j.error === 'out of stock') log(`<span class="bad">Другой игрок успел раньше — ${ITEMS[rid].name.toLowerCase()} разобрали.</span>`);
+      else log(`<span class="bad">Ошибка торговли: ${j.error||r.status}.</span>`);
+      return null;
+    }
+    return j;
+  } catch (e) {
+    log(`<span class="bad">Нет связи с рынком.</span>`);
+    return null;
+  }
+}
+async function tradeBuy(rid) {
+  const loc = P.location;
+  const price = marketPrice(loc, rid);
+  const stock = traderStock(loc, rid);
+  if (stock <= 0) { log(`<span class="bad">У ${TRADERS[loc].name} нет ${ITEMS[rid].name.toLowerCase()} — разобрали.</span>`); return; }
   const el = document.getElementById('trq-'+rid);
   let n = Math.max(1, Math.floor(parseInt(el&&el.value)||1));
   n = Math.min(n, stock);
-  const total = price * n;
-  if (P.gold < total) { log(`<span class="bad">Не хватает ${total - P.gold} золота.</span>`); return; }
-  P.gold -= total;
-  P.inv[rid] = (P.inv[rid]||0) + n;
-  P.market.stock[P.location][rid] -= n;
-  log(`<span class="good"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено у ${TRADERS[P.location].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${n} за ${total}.</span>`);
-  renderResourceGrid(); render();
+  if (P.gold < price * n) { log(`<span class="bad">Не хватает ${price*n - P.gold} золота.</span>`); return; }
+  const j = await marketTradeCall(loc, rid, n, 'buy');
+  if (!j) { renderResourceGrid(); return; }
+  P.gold -= j.total;
+  P.inv[rid] = (P.inv[rid]||0) + j.qty;
+  log(`<span class="good"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено у ${TRADERS[loc].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${j.qty} за ${j.total}.</span>`);
+  save(); renderResourceGrid(); render();
 }
 function qtyStep(id, delta) {
   const el = document.getElementById(id); if (!el) return;
@@ -865,43 +863,42 @@ function qtyStep(id, delta) {
   const v = Math.max(min, (parseInt(el.value)||min) + delta);
   el.value = v;
 }
-function tradeBuyMax(rid) {
-  const price = marketPrice(P.location, rid);
-  const stock = traderStock(P.location, rid);
-  if (stock <= 0) { log(`<span class="bad">У ${TRADERS[P.location].name} нет ${ITEMS[rid].name.toLowerCase()} на продажу.</span>`); return; }
+async function tradeBuyMax(rid) {
+  const loc = P.location;
+  const price = marketPrice(loc, rid);
+  const stock = traderStock(loc, rid);
+  if (stock <= 0) { log(`<span class="bad">У ${TRADERS[loc].name} нет ${ITEMS[rid].name.toLowerCase()} — разобрали.</span>`); return; }
   const n = Math.min(stock, Math.floor(P.gold / price));
   if (n < 1) { log(`<span class="bad">Золота не хватает даже на одну штуку ${ITEMS[rid].name}.</span>`); return; }
-  const total = price * n;
-  P.gold -= total;
-  P.inv[rid] = (P.inv[rid]||0) + n;
-  P.market.stock[P.location][rid] -= n;
-  log(`<span class="good"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено у ${TRADERS[P.location].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${n} за ${total}.</span>`);
-  renderResourceGrid(); render();
+  const j = await marketTradeCall(loc, rid, n, 'buy');
+  if (!j) { renderResourceGrid(); return; }
+  P.gold -= j.total;
+  P.inv[rid] = (P.inv[rid]||0) + j.qty;
+  log(`<span class="good"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено у ${TRADERS[loc].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${j.qty} за ${j.total}.</span>`);
+  save(); renderResourceGrid(); render();
 }
-function tradeSellAll(rid) {
+async function tradeSellAll(rid) {
+  const loc = P.location;
   const have = P.inv[rid] || 0; if (!have) return;
-  const price = marketPrice(P.location, rid);
-  const total = price * have;
-  delete P.inv[rid];
-  P.gold += total;
-  ensureStock();
-  P.market.stock[P.location][rid] = (P.market.stock[P.location][rid]||0) + have;
-  log(`<span class="info"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Продано ${TRADERS[P.location].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${have} за ${total} (весь стак).</span>`);
-  renderResourceGrid(); render();
+  const j = await marketTradeCall(loc, rid, have, 'sell');
+  if (!j) { renderResourceGrid(); return; }
+  P.inv[rid] -= j.qty; if (P.inv[rid]<=0) delete P.inv[rid];
+  P.gold += j.total;
+  log(`<span class="info"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Продано ${TRADERS[loc].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${j.qty} за ${j.total} (весь стак).</span>`);
+  save(); renderResourceGrid(); render();
 }
-function tradeSell(rid) {
+async function tradeSell(rid) {
+  const loc = P.location;
   const have = P.inv[rid] || 0; if (!have) return;
-  const price = marketPrice(P.location, rid);
   const el = document.getElementById('trq-'+rid);
   let n = Math.max(1, Math.floor(parseInt(el&&el.value)||1));
   n = Math.min(n, have);
-  const total = price * n;
-  P.inv[rid] -= n; if (P.inv[rid]<=0) delete P.inv[rid];
-  P.gold += total;
-  ensureStock();
-  P.market.stock[P.location][rid] = (P.market.stock[P.location][rid]||0) + n;
-  log(`<span class="info"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Продано ${TRADERS[P.location].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${n} за ${total}.</span>`);
-  renderResourceGrid(); render();
+  const j = await marketTradeCall(loc, rid, n, 'sell');
+  if (!j) { renderResourceGrid(); return; }
+  P.inv[rid] -= j.qty; if (P.inv[rid]<=0) delete P.inv[rid];
+  P.gold += j.total;
+  log(`<span class="info"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Продано ${TRADERS[loc].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${j.qty} за ${j.total}.</span>`);
+  save(); renderResourceGrid(); render();
 }
 
 // ==================== ВРАГИ ====================
@@ -1103,7 +1100,7 @@ function loadSave() {
     if (P) migrateEquipment();
     if (P && CLASSES[P.cls]) { P.ico = CLASSES[P.cls].ico; P.className = CLASSES[P.cls].name; }
     if (P) { if (!P.spellLvl) P.spellLvl = {}; if (typeof P.skillPts !== 'number') P.skillPts = 0; }
-    if (P && !P.market) { P.market = null; regenMarket(); }
+    if (P && !P.market) P.market = { seen:{} };
     logHistory = d.logHistory || [];
     return true;
   } catch(e) { return false; }
@@ -1501,9 +1498,9 @@ function startGame(name, cls) {
     quests:{ active:{}, completed:[], available:['q_rats','q_wolves'] },
     killedBosses:[],
     stages: Object.fromEntries(Object.keys(LOCATIONS).map(k=>[k,1])),
-    market: null
+    market: { seen:{} }
   };
-  regenMarket();
+  fetchMarket().catch(()=>{});
   $('start-modal').classList.remove('show');
   hr();
   log(`<span class="epic"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> ${name} (${c.name}) вступает в Сумрачные Земли! <img class="gi" src="assets/icons/crossed-swords.svg" alt=""></span>`);
@@ -2106,16 +2103,21 @@ function openShop() {
   const sid = LOCATIONS[P.location].shop;
   shopState.tab = sid ? 'weapon' : 'resources';
   $('shop-modal').classList.add('show');
-  ensureMarket();
+  fetchMarket().catch(()=>{});
   renderShop();
   if (shopTraderTicker) clearInterval(shopTraderTicker);
-  shopTraderTicker = setInterval(() => {
+  let tick = 0;
+  shopTraderTicker = setInterval(async () => {
     if (!$('shop-modal').classList.contains('show')) { clearInterval(shopTraderTicker); shopTraderTicker=null; return; }
     if (shopState.tab !== 'resources') return;
-    if (Date.now() >= (P.market.nextAt||0)) { regenMarket(); noteSeen(P.location); renderShop(); return; }
+    tick++;
     const el = document.getElementById('trader-timer');
-    if (el) el.textContent = formatTimer(P.market.nextAt - Date.now());
-  }, 500);
+    if (el) el.textContent = formatTimer(MARKET.nextAt - Date.now());
+    if (tick % 4 === 0 || Date.now() >= (MARKET.nextAt||0)) {
+      await fetchMarket().catch(()=>{});
+      if (shopState.tab === 'resources' && $('shop-modal').classList.contains('show')) renderResourceGrid();
+    }
+  }, 1000);
 }
 function closeShop() {
   $('shop-modal').classList.remove('show');

@@ -179,6 +179,88 @@ app.post('/api/save', auth, async (req, res) => {
   }
 });
 
+// ==================== SHARED MARKET ====================
+const RESOURCE_IDS = ['r_fur','r_herb','r_ore','r_silk','r_gem','r_spice'];
+const RESOURCE_BASE = { r_fur:8, r_herb:6, r_ore:12, r_silk:18, r_gem:45, r_spice:30 };
+const RESOURCE_NAMES = { r_fur:'мех', r_herb:'травы', r_ore:'руда', r_silk:'шёлк', r_gem:'самоцветы', r_spice:'пряности' };
+const LOCATION_IDS = ['village','forest','swamp','cave','crypt','ruins','port','mountains','volcano','lair'];
+const TRADER_NAMES = {
+  village:'Торговец Гуго', forest:'Лесник Ториг', swamp:'Ведьма Мирра',
+  cave:'Гном-старатель Бром', crypt:'Старьёвщик Сельд', ruins:'Коллекционер Элгар',
+  port:'Капитан Рен', mountains:'Шерп Ивор', volcano:'Огневар Ксант', lair:'Торговец-призрак'
+};
+const EVENT_TEMPLATES = [
+  { kind:'up', mul:[1.6,2.2], tpl:(t,r)=>`У ${t} пожар на складе — ${r} почти не осталось, цена взлетела.` },
+  { kind:'up', mul:[1.5,2.0], tpl:(t,r)=>`${t} срочно скупает ${r}: готовится большой заказ.` },
+  { kind:'up', mul:[1.7,2.4], tpl:(t,r)=>`Слух: в округе ${t} эпидемия — ${r} в цене.` },
+  { kind:'up', mul:[1.5,1.9], tpl:(t,r)=>`Караван с ${r} не дошёл до ${t} — торговец поднял цену.` },
+  { kind:'up', mul:[1.4,1.8], tpl:(t,r)=>`${t} объявил награду за ${r}: запасы иссякли.` },
+  { kind:'down', mul:[0.35,0.6], tpl:(t,r)=>`К ${t} прибыл караван — ${r} в избытке, цены обвалились.` },
+  { kind:'down', mul:[0.4,0.65], tpl:(t,r)=>`Охотники завалили склад ${t} — ${r} некуда девать.` },
+  { kind:'down', mul:[0.45,0.7], tpl:(t,r)=>`У ${t} портится ${r} — сбывает задёшево.` },
+  { kind:'down', mul:[0.4,0.6], tpl:(t,r)=>`${t} получил долг ${r}ом — ему бы скинуть лишнее.` }
+];
+const MARKET_PERIOD_MS = 60000;
+const market = { prices:{}, stock:{}, news:[], nextAt:0 };
+for (const loc of LOCATION_IDS) market.stock[loc] = Object.fromEntries(RESOURCE_IDS.map(r=>[r,0]));
+
+function rndF(a,b){ return a + Math.random()*(b-a); }
+function regenMarket() {
+  const prices = {}, news = [];
+  for (const loc of LOCATION_IDS) {
+    prices[loc] = {};
+    for (const rid of RESOURCE_IDS) {
+      prices[loc][rid] = Math.max(1, Math.round(RESOURCE_BASE[rid] * rndF(0.85, 1.15)));
+    }
+  }
+  const used = new Set();
+  const eventCount = 2 + Math.floor(Math.random()*2);
+  for (let i=0;i<eventCount;i++) {
+    const tpl = EVENT_TEMPLATES[Math.floor(Math.random()*EVENT_TEMPLATES.length)];
+    let loc, rid, key;
+    for (let t=0;t<12;t++) {
+      loc = LOCATION_IDS[Math.floor(Math.random()*LOCATION_IDS.length)];
+      rid = RESOURCE_IDS[Math.floor(Math.random()*RESOURCE_IDS.length)];
+      key = loc+':'+rid;
+      if (!used.has(key)) break;
+    }
+    if (used.has(key)) continue;
+    used.add(key);
+    const mul = rndF(tpl.mul[0], tpl.mul[1]);
+    prices[loc][rid] = Math.max(1, Math.round(RESOURCE_BASE[rid] * mul));
+    news.push({ loc, res:rid, kind:tpl.kind, text: tpl.tpl(TRADER_NAMES[loc], RESOURCE_NAMES[rid]) });
+  }
+  market.prices = prices;
+  market.news = news;
+  market.nextAt = Date.now() + MARKET_PERIOD_MS;
+}
+function ensureMarket() {
+  if (!market.prices || !Object.keys(market.prices).length || Date.now() >= market.nextAt) regenMarket();
+}
+
+app.get('/api/market', (_req, res) => {
+  ensureMarket();
+  res.json({ prices: market.prices, stock: market.stock, news: market.news, nextAt: market.nextAt });
+});
+
+app.post('/api/market/trade', auth, (req, res) => {
+  ensureMarket();
+  const { loc, rid, qty, action } = req.body || {};
+  if (!LOCATION_IDS.includes(loc) || !RESOURCE_IDS.includes(rid)) return res.status(400).json({ error: 'bad payload' });
+  const n = Math.max(1, Math.min(9999, parseInt(qty)|0));
+  const price = market.prices[loc][rid];
+  if (action === 'buy') {
+    const have = market.stock[loc][rid] || 0;
+    if (have < n) return res.status(409).json({ error: 'out of stock', stock: have, price, market: { prices: market.prices, stock: market.stock, news: market.news, nextAt: market.nextAt } });
+    market.stock[loc][rid] = have - n;
+    return res.json({ ok:true, action, loc, rid, qty:n, price, total: price*n, market: { prices: market.prices, stock: market.stock, news: market.news, nextAt: market.nextAt } });
+  } else if (action === 'sell') {
+    market.stock[loc][rid] = (market.stock[loc][rid]||0) + n;
+    return res.json({ ok:true, action, loc, rid, qty:n, price, total: price*n, market: { prices: market.prices, stock: market.stock, news: market.news, nextAt: market.nextAt } });
+  }
+  return res.status(400).json({ error: 'bad action' });
+});
+
 app.get('/api/leaderboard', async (_req, res) => {
   try {
     const r = await pool.query(
