@@ -2561,6 +2561,8 @@ window.addEventListener('pagehide', leaveArenaBeacon);
 window.addEventListener('beforeunload', leaveArenaBeacon);
 
 let villageFeedSince = Date.now();
+const villageFeedSeen = new Map(); // text -> lastShownAt
+const VILLAGE_FEED_DEDUP_MS = 60000;
 setInterval(async () => {
   if (!authToken() || !P || P.location !== 'village') return;
   try {
@@ -2571,7 +2573,12 @@ setInterval(async () => {
     const j = await r.json();
     if (typeof j.now === 'number') villageFeedSince = j.now;
     if (Array.isArray(j.events)) {
+      const now = Date.now();
+      for (const [k, t] of villageFeedSeen) if (now - t > VILLAGE_FEED_DEDUP_MS) villageFeedSeen.delete(k);
       for (const ev of j.events) {
+        const last = villageFeedSeen.get(ev.text) || 0;
+        if (now - last < VILLAGE_FEED_DEDUP_MS) continue;
+        villageFeedSeen.set(ev.text, now);
         log(`<span class="info"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> ${escapeHtml(ev.text)}</span>`);
       }
     }
