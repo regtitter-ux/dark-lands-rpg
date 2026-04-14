@@ -1376,7 +1376,7 @@ function renderCloudPanel() {
   const user = authUsername();
   if (!user) {
     el.innerHTML = `
-      <div class="auth-hint">Войди в аккаунт или создай новый — прогресс сохраняется в облако,<br>ник берётся из логина.</div>
+      <div class="auth-hint">Войди в аккаунт или создай новый — прогресс сохраняется в облако, ник берётся из логина.</div>
       <div class="auth-field">
         <img class="gi" src="assets/icons/sparkles.svg" alt="">
         <input id="auth-user" placeholder="логин (2-24 символа)" maxlength="24" autocomplete="username" onkeydown="if(event.key==='Enter')doAuthLogin()">
