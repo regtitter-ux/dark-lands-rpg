@@ -1228,6 +1228,18 @@ if (loadSave() && P) {
     for (const e of Es) scheduleEnemy(e, true);
     startCombatLoop();
   }
+} else if (authToken()) {
+  (async () => {
+    try {
+      const j = await cloudFetch();
+      if (j && j.save_blob && j.save_blob.P) {
+        applyCloudSave(j);
+        $('start-modal').classList.remove('show');
+        render();
+        log(`<span class="sys">— прогресс восстановлен из облака —</span>`);
+      }
+    } catch {}
+  })();
 }
 renderCloudPanel();
 
@@ -1306,18 +1318,37 @@ async function cloudSync() {
     if (!r.ok) { const j = await r.json().catch(()=>({})); throw new Error(j.error || 'save failed'); }
   } finally { cloudPushing = false; }
 }
-async function cloudPull() {
+async function cloudFetch() {
   const tok = authToken(); if (!tok) throw new Error('нет токена');
   const r = await fetch(API_BASE+'/api/me', { headers:{'Authorization':'Bearer '+tok} });
   if (r.status === 401) { authClear(); renderCloudPanel(); throw new Error('сессия истекла'); }
   const j = await r.json();
   if (!r.ok) throw new Error(j.error || 'load failed');
-  if (!j.save_blob || !j.save_blob.P) throw new Error('в облаке пусто');
-  if (!(await confirmDialog('Заменить текущий прогресс облачным?<br><span style="color:#cf4030">Текущий локальный сейв будет потерян.</span>', { title:'Загрузка из облака', okText:'Заменить', danger:true }))) return;
+  return j;
+}
+function applyCloudSave(j) {
+  if (!j || !j.save_blob || !j.save_blob.P) return false;
   P = j.save_blob.P;
-  unlocked = j.save_blob.unlocked || unlocked;
+  unlocked = j.save_blob.unlocked || ['village','forest'];
   Es = []; target = 0; inCombat = false;
-  save(); render(); renderCloudPanel();
+  if (P && !P.stages) P.stages = Object.fromEntries(Object.keys(LOCATIONS).map(k=>[k,1]));
+  if (P && P.stages) { for (const k of Object.keys(LOCATIONS)) if (!P.stages[k]) P.stages[k]=1; }
+  migrateEquipment();
+  if (P && CLASSES[P.cls]) { P.ico = CLASSES[P.cls].ico; P.className = CLASSES[P.cls].name; }
+  if (!P.spellLvl) P.spellLvl = {};
+  if (typeof P.skillPts !== 'number') P.skillPts = 0;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ P, Es, target, inCombat, unlocked, logHistory: [] })); } catch {}
+  return true;
+}
+async function cloudPull() {
+  const j = await cloudFetch();
+  if (!j.save_blob || !j.save_blob.P) throw new Error('в облаке пусто');
+  applyCloudSave(j);
+  if (typeof $('start-modal') !== 'undefined' && $('start-modal')) $('start-modal').classList.remove('show');
+  render();
+  try { logHistory = []; restoreLog(); } catch {}
+  log(`<span class="sys">— прогресс загружен из облака —</span>`);
+  renderCloudPanel();
 }
 async function doLogout() {
   if (!(await confirmDialog('Выйти из аккаунта?<br><span style="color:#8b6f47">Локальный сейв останется на этом устройстве.</span>', { title:'Выход', okText:'Выйти' }))) return;
@@ -1395,7 +1426,6 @@ function renderCloudPanel() {
   el.innerHTML = `
     <div class="auth-account">Добро пожаловать, <b>${escapeHtml(user)}</b> <span style="color:#6abe30">● авто-синк</span></div>
     <div class="auth-actions">
-      <button class="auth-btn" onclick="doCloudPull()">Загрузить из облака</button>
       <button class="auth-btn ghost" onclick="doLogout()">Сменить аккаунт</button>
     </div>
     <div class="auth-msg" id="cloud-msg" style="color:#6abe30"></div>`;
@@ -1409,7 +1439,7 @@ async function doAuthRegister() {
   msg.style.color='#5fb3d4'; msg.textContent='регистрация...';
   try {
     await authRegister(u, p);
-    await cloudSync();
+    if (P) await cloudSync().catch(()=>{});
     renderCloudPanel(); fetchLeaderboard();
     log(`<span class="good">Аккаунт создан: ${escapeHtml(u)}.</span>`);
   } catch (e) { msg.style.color='#cf4030'; msg.textContent = e.message; }
@@ -1422,21 +1452,20 @@ async function doAuthLogin() {
   msg.style.color='#5fb3d4'; msg.textContent='вход...';
   try {
     await authLogin(u, p);
+    msg.style.color='#5fb3d4'; msg.textContent='загрузка данных...';
+    const j = await cloudFetch().catch(()=>null);
+    if (j && j.save_blob && j.save_blob.P) {
+      applyCloudSave(j);
+      $('start-modal').classList.remove('show');
+      render();
+      logHistory = []; restoreLog();
+      log(`<span class="good">Вход: ${escapeHtml(u)}. Прогресс загружен из облака.</span>`);
+    } else {
+      log(`<span class="good">Вход: ${escapeHtml(u)}.</span>`);
+      if (P) await cloudSync().catch(()=>{});
+    }
     renderCloudPanel(); fetchLeaderboard();
-    log(`<span class="good">Вход: ${escapeHtml(u)}.</span>`);
-    await cloudSync();
   } catch (e) { msg.style.color='#cf4030'; msg.textContent = e.message; }
-}
-async function doCloudSync() {
-  const msg = document.getElementById('cloud-msg');
-  msg.style.color='#5fb3d4'; msg.textContent='синхронизация...';
-  try { await cloudSync(); msg.style.color='#6abe30'; msg.textContent='сохранено в облаке ✓'; fetchLeaderboard(); }
-  catch (e) { msg.style.color='#cf4030'; msg.textContent=e.message; }
-}
-async function doCloudPull() {
-  const msg = document.getElementById('cloud-msg');
-  try { await cloudPull(); msg.style.color='#6abe30'; msg.textContent='загружено из облака ✓'; }
-  catch (e) { msg.style.color='#cf4030'; msg.textContent=e.message; }
 }
 // safety-net periodic push (save() already triggers scheduleCloudPush)
 setInterval(() => { if (authToken() && P) cloudSync().catch(()=>{}); }, 60000);
