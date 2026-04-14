@@ -2650,7 +2650,11 @@ async function arenaAction(body) {
 async function arenaAttack() {
   ensureTarget();
   const e = Es[target];
-  if (!e || !e._pvp || e._dead) return;
+  if (!e || !e._pvp || e._dead) {
+    const alive = Es.some(x => x && x._pvp && !x._dead);
+    if (!alive) log(`<span class="info">Арена пуста — некого атаковать.</span>`);
+    return;
+  }
   const res = await arenaAction({ type:'attack', target_id: e._pvpTargetId });
   if (!res.ok) {
     if (res.j && res.j.error === 'target gone') {
