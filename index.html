@@ -1509,7 +1509,7 @@ function renderQuests() {
         <div class="desc">${q.desc}</div>
         <div class="progress">Прогресс: ${prog}/${need} ${done?'<b style="color:#6abe30"><img class="gi" src="assets/icons/check-mark.svg" alt=""> готово</b>':''}</div>
         <div class="reward">Награда: ${q.reward.gold||0}<img class="gi" src="assets/icons/two-coins.svg" alt=""></div>
-        ${done?`<button class="tiny" style="margin-top:4px" onclick="claimQuest('${qid}')">${P.location===q.giver?'Сдать':'Вернуться к '+LOCATIONS[q.giver].name}</button>`:''}
+        ${done?`<button class="tiny" style="margin-top:4px" onclick="${P.location===q.giver?`claimQuest('${qid}')`:`travel('${q.giver}')`}">${P.location===q.giver?'Сдать':'Вернуться к '+LOCATIONS[q.giver].name}</button>`:''}
       </div>`;
     }).join('');
   } else {
