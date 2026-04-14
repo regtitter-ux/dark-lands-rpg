@@ -323,8 +323,8 @@ app.post('/api/market/trade', auth, (req, res) => {
 const villageFeed = [];
 const FEED_TTL_MS = 300000;
 const FEED_MAX = 120;
-function emitFeed(text, actorId = null, victimId = null) {
-  villageFeed.push({ t: Date.now(), text, actor: actorId, victim: victimId });
+function emitFeed(text, actorId = null, victimId = null, kind = null) {
+  villageFeed.push({ t: Date.now(), text, actor: actorId, victim: victimId, kind });
   const cutoff = Date.now() - FEED_TTL_MS;
   while (villageFeed.length && villageFeed[0].t < cutoff) villageFeed.shift();
   if (villageFeed.length > FEED_MAX) villageFeed.splice(0, villageFeed.length - FEED_MAX);
@@ -394,7 +394,6 @@ const SPELLS = {
 function spellMul(spellLvl, key) { return 1 + 0.2 * ((spellLvl && spellLvl[key]) || 0); }
 function rndI(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
 function applyDamage(tgt, now, dmg) {
-  if (tgt.defendUntil > now) dmg = Math.max(1, Math.floor(dmg / 2));
   dmg = Math.max(1, Math.floor(dmg));
   tgt.hp = Math.max(0, tgt.hp - dmg);
   return dmg;
@@ -406,7 +405,7 @@ function arenaPrune() {
     if (p.dead && now - p.deathAt > CORPSE_LINGER_MS) { arena.delete(id); continue; }
     if (!p.dead && now - p.lastSeen > ARENA_TIMEOUT_MS) {
       arena.delete(id);
-      if (feedThrottle('leave', id)) emitFeed(pickTpl(FEED_LEAVE)(p.username), id);
+      if (feedThrottle('leave', id)) emitFeed(pickTpl(FEED_LEAVE)(p.username), id, null, 'leave');
     }
   }
 }
@@ -429,7 +428,6 @@ function arenaListFor(uid) {
       id, username: p.username, cls: p.cls, lvl: p.lvl,
       hp: p.hp, hpMax: p.hpMax,
       dead: !!p.dead,
-      defending: p.defendUntil > now,
     });
   }
   return list;
@@ -482,12 +480,12 @@ app.post('/api/arena/enter', auth, async (req, res) => {
       str: stats.str, agi: stats.agi, int_: stats.int_,
       armor: stats.armor, crit: stats.crit, wdmg: stats.wdmg,
       spellLvl, spellCd: {},
-      defendUntil: 0, lastAttack: 0, lastDefend: 0,
+      lastAttack: 0,
       lastRegen: now, lastSeen: now,
       dead: false, killedBy: null, deathAt: 0,
       pvp_kills: base.pvp_kills|0,
     });
-    if (!wasPresent && feedThrottle('enter', req.user.uid)) emitFeed(pickTpl(FEED_ENTER)(base.username), req.user.uid);
+    if (!wasPresent && feedThrottle('enter', req.user.uid)) emitFeed(pickTpl(FEED_ENTER)(base.username), req.user.uid, null, 'enter');
     res.json({ ok: true });
   } catch (e) {
     console.error(e); res.status(500).json({ error: 'db error' });
@@ -498,7 +496,7 @@ app.post('/api/arena/leave', auth, (req, res) => {
   const p = arena.get(req.user.uid);
   if (p) {
     arena.delete(req.user.uid);
-    if (!p.dead && feedThrottle('leave', req.user.uid)) emitFeed(pickTpl(FEED_LEAVE)(p.username), req.user.uid);
+    if (!p.dead && feedThrottle('leave', req.user.uid)) emitFeed(pickTpl(FEED_LEAVE)(p.username), req.user.uid, null, 'leave');
   }
   res.json({ ok: true });
 });
@@ -511,7 +509,7 @@ app.post('/api/arena/leave-beacon', (req, res) => {
       const p = arena.get(u.uid);
       if (p) {
         arena.delete(u.uid);
-        if (!p.dead && feedThrottle('leave', u.uid)) emitFeed(pickTpl(FEED_LEAVE)(p.username), u.uid);
+        if (!p.dead && feedThrottle('leave', u.uid)) emitFeed(pickTpl(FEED_LEAVE)(p.username), u.uid, null, 'leave');
       }
     } catch {}
   }
@@ -522,8 +520,12 @@ app.get('/api/village/feed', auth, (req, res) => {
   const since = parseInt(req.query.since)|0;
   const uid = req.user.uid;
   const events = villageFeed
-    .filter(ev => ev.t > since && ev.actor !== uid && ev.victim !== uid)
-    .map(ev => ({ t: ev.t, text: ev.text }));
+    .filter(ev => {
+      if (ev.t <= since) return false;
+      if (ev.kind === 'kill') return true;
+      return ev.actor !== uid && ev.victim !== uid;
+    })
+    .map(ev => ({ t: ev.t, text: ev.text, kind: ev.kind || null }));
   res.json({ events, now: Date.now() });
 });
 
@@ -554,7 +556,7 @@ async function resolveKill(winnerId, loserId) {
       || (await pool.query(`SELECT username FROM users WHERE id=$1`, [winnerId])).rows[0]?.username || 'кто-то';
     const loserName  = (arena.get(loserId) || {}).username
       || (await pool.query(`SELECT username FROM users WHERE id=$1`, [loserId])).rows[0]?.username || 'кто-то';
-    emitFeed(pickTpl(FEED_KILL)(winnerName, loserName), winnerId, loserId);
+    emitFeed(pickTpl(FEED_KILL)(winnerName, loserName), winnerId, loserId, 'kill');
     return { transfer, pvp_kills: w.rows[0]?.pvp_kills|0, winnerName, loserName };
   } catch (e) {
     await client.query('ROLLBACK').catch(()=>{});
@@ -577,16 +579,8 @@ app.post('/api/arena/action', auth, async (req, res) => {
 
   if (type === 'leave') {
     arena.delete(me);
-    if (feedThrottle('leave', me)) emitFeed(pickTpl(FEED_LEAVE)(self.username), me);
+    if (feedThrottle('leave', me)) emitFeed(pickTpl(FEED_LEAVE)(self.username), me, null, 'leave');
     return res.json({ ok: true, left: true });
-  }
-  if (type === 'defend') {
-    if (now - self.lastDefend < DEFEND_CD_MS) {
-      return res.json({ ok: false, reason: 'cd', cd_ms: DEFEND_CD_MS - (now - self.lastDefend) });
-    }
-    self.lastDefend = now;
-    self.defendUntil = now + DEFEND_DUR_MS;
-    return res.json({ ok: true, defendUntil: self.defendUntil });
   }
   if (type === 'attack') {
     const tid = parseInt(req.body?.target_id)|0;
@@ -606,7 +600,6 @@ app.post('/api/arena/action', auth, async (req, res) => {
     const crit = Math.random() < self.crit;
     if (crit) dmg = Math.floor(dmg * 1.7);
     dmg = Math.max(1, dmg - Math.floor(tgt.armor / 2));
-    if (tgt.defendUntil > now) dmg = Math.max(1, Math.floor(dmg / 2));
     tgt.hp = Math.max(0, tgt.hp - dmg);
     let kill = null;
     if (tgt.hp <= 0) {
@@ -706,9 +699,7 @@ app.get('/api/arena/state', auth, (req, res) => {
     mp: self.mp, mpMax: self.mpMax,
     dead: !!self.dead,
     killedBy: self.killedBy,
-    defendUntil: self.defendUntil,
     attackReadyAt: self.lastAttack + ATTACK_CD_MS,
-    defendReadyAt: self.lastDefend + DEFEND_CD_MS,
     pvp_kills: self.pvp_kills,
     username: self.username,
     spellCd: self.spellCd || {},

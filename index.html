@@ -577,6 +577,13 @@ const ITEMS = {
   b_leather:         { type:'armor', slot:'belt', ico:'<img class="gi" src="assets/icons/knot.svg" alt="">', name:'Кожаный пояс',     bonuses:{hpMax:20}, price:70,  desc:'+20 HP' },
   b_warrior:         { type:'armor', slot:'belt', ico:'<img class="gi" src="assets/icons/knot.svg" alt="">', name:'Боевой пояс',      bonuses:{str:3,hpMax:30}, price:320, desc:'+3 STR, +30 HP' },
   b_might:           { type:'armor', slot:'belt', ico:'<img class="gi" src="assets/icons/knot.svg" alt="">', name:'Пояс могущества',  bonuses:{str:5,hpMax:60}, price:1200, desc:'+5 STR, +60 HP' },
+
+  p_cloth:           { type:'armor', slot:'legs', ico:'<img class="gi" src="assets/icons/kimono.svg" alt="">', name:'Тряпичные штаны',   armor:1,  price:40,   desc:'Лучше, чем ничего' },
+  p_leather:         { type:'armor', slot:'legs', ico:'<img class="gi" src="assets/icons/kimono.svg" alt="">', name:'Кожаные штаны',     armor:3,  price:120,  desc:'Удобная защита ног' },
+  p_chain:           { type:'armor', slot:'legs', ico:'<img class="gi" src="assets/icons/mail-shirt.svg" alt="">', name:'Кольчужные поножи',  armor:6,  price:380,  desc:'Звенят сталью' },
+  p_plate:           { type:'armor', slot:'legs', ico:'<img class="gi" src="assets/icons/shoulder-armor.svg" alt="">', name:'Латные поножи',      armor:11, price:860,  desc:'Тяжёлая защита ног' },
+  p_dragon:          { type:'armor', slot:'legs', ico:'<img class="gi" src="assets/icons/dragon-spiral.svg" alt="">', name:'Драконьи поножи',    armor:18, price:2100, desc:'Чешуя укрывает ноги' },
+  p_assassin:        { type:'armor', slot:'legs', ico:'<img class="gi" src="assets/icons/kimono.svg" alt="">', name:'Тени ассасина',     armor:4, bonuses:{agi:4}, price:700,  desc:'+4 AGI, броня 4' },
   // Кольца
   ring_str:          { type:'accessory', slot:'ring', ico:'<img class="gi" src="assets/icons/diamond-ring.svg" alt="">', name:'Кольцо силы',      bonuses:{str:4},   price:160, desc:'+4 к силе' },
   ring_agi:          { type:'accessory', slot:'ring', ico:'<img class="gi" src="assets/icons/diamond-ring.svg" alt="">', name:'Кольцо ловкости',  bonuses:{agi:4},   price:160, desc:'+4 к ловкости' },
@@ -951,11 +958,11 @@ const LOCATIONS = {
 const SHOPS = {
   village: {
     name:'<img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Лавка торговца Гуго',
-    items:['potion_s','potion_m','mana_s','bomb','w_axe','ww_gladius','ww_broadsword','ww_cleaver','ww_halberd','ww_stone_axe','wm_crystal_wand','wm_fairy_wand','wm_scroll_staff','wm_gem_wand','wm_frost_orb','wr_curvy_knife','wr_stiletto','wr_sai','wr_butterfly','wr_feather','a_leather','a_chain','h_hood','h_helmet','s_pads','b_leather','b_warrior','o_buckler','o_shield','ring_str','ring_agi','ring_int','art_orb','art_skull']
+    items:['potion_s','potion_m','mana_s','bomb','w_axe','ww_gladius','ww_broadsword','ww_cleaver','ww_halberd','ww_stone_axe','wm_crystal_wand','wm_fairy_wand','wm_scroll_staff','wm_gem_wand','wm_frost_orb','wr_curvy_knife','wr_stiletto','wr_sai','wr_butterfly','wr_feather','a_leather','a_chain','h_hood','h_helmet','s_pads','b_leather','b_warrior','p_cloth','p_leather','p_chain','o_buckler','o_shield','ring_str','ring_agi','ring_int','art_orb','art_skull']
   },
   port: {
     name:'<img class="gi" src="assets/icons/anchor.svg" alt=""> Морская торговая лавка',
-    items:['potion_m','potion_l','mana_m','elixir','bomb','w_warhammer','w_greatsword','w_runic','w_dragonfang','ww_war_pick','ww_spiked_mace','ww_katana','ww_winged_sword','ww_bloody','wm_swirl_wand','wm_thunder','wm_trident','wm_tome','wm_sun_orb','wr_thrown','wr_poison','wr_arrow','wr_bow','wr_shadow','a_chain','a_plate','a_dragon','h_helmet','h_crown','s_pauldrons','s_dragon','b_warrior','b_might','o_shield','o_tower','ring_str','ring_agi','ring_int','amulet_hp','amulet_mp','amulet_crit','amulet_phoenix','art_orb','art_skull','art_compass','art_ankh','art_eye']
+    items:['potion_m','potion_l','mana_m','elixir','bomb','w_warhammer','w_greatsword','w_runic','w_dragonfang','ww_war_pick','ww_spiked_mace','ww_katana','ww_winged_sword','ww_bloody','wm_swirl_wand','wm_thunder','wm_trident','wm_tome','wm_sun_orb','wr_thrown','wr_poison','wr_arrow','wr_bow','wr_shadow','a_chain','a_plate','a_dragon','h_helmet','h_crown','s_pauldrons','s_dragon','b_warrior','b_might','p_chain','p_plate','p_dragon','p_assassin','o_shield','o_tower','ring_str','ring_agi','ring_int','amulet_hp','amulet_mp','amulet_crit','amulet_phoenix','art_orb','art_skull','art_compass','art_ankh','art_eye']
   }
 };
 
@@ -1172,11 +1179,12 @@ function flashSave() {
 }
 
 // ==================== ЭКВИП И СТАТЫ ====================
-const SLOTS = ['head','amulet','shoulders','body','belt','weapon','offhand','ring','art1','art2','art3'];
-const SLOT_NAMES = { head:'Голова', amulet:'Амулет', shoulders:'Плечи', body:'Тело', belt:'Пояс', weapon:'Оружие', offhand:'Защита', ring:'Кольцо', art1:'Артефакт I', art2:'Артефакт II', art3:'Артефакт III' };
+const SLOTS = ['head','amulet','shoulders','body','belt','legs','weapon','offhand','ring','art1','art2','art3'];
+const SLOT_NAMES = { head:'Голова', amulet:'Амулет', shoulders:'Плечи', body:'Тело', belt:'Пояс', legs:'Штаны', weapon:'Оружие', offhand:'Защита', ring:'Кольцо', art1:'Артефакт I', art2:'Артефакт II', art3:'Артефакт III' };
 const SLOT_FITS = {
   head:i=>i.slot==='head', amulet:i=>i.slot==='amulet', shoulders:i=>i.slot==='shoulders',
-  body:i=>i.slot==='body', belt:i=>i.slot==='belt', weapon:i=>i.slot==='weapon' && (!i.cls || i.cls===(P&&P.cls)),
+  body:i=>i.slot==='body', belt:i=>i.slot==='belt', legs:i=>i.slot==='legs',
+  weapon:i=>i.slot==='weapon' && (!i.cls || i.cls===(P&&P.cls)),
   offhand:i=>(i.slot==='offhand'||(i.slot==='weapon' && (!i.cls || i.cls===(P&&P.cls)))), ring:i=>i.slot==='ring',
   art1:i=>i.slot==='artifact', art2:i=>i.slot==='artifact', art3:i=>i.slot==='artifact'
 };
@@ -1628,6 +1636,7 @@ function renderEquipGrid() {
     {slot:'shoulders', col:1, row:2},
     {slot:'body',      col:1, row:3},
     {slot:'belt',      col:1, row:4},
+    {slot:'legs',      col:1, row:5},
     {slot:'weapon',    col:2, row:4},
     {slot:'offhand',   col:2, row:5},
     {slot:'amulet',    col:3, row:1},
@@ -1639,7 +1648,7 @@ function renderEquipGrid() {
   const heroIco = (P && P.ico) || '<img class="gi" src="assets/icons/wizard-face.svg" alt="">';
   const PLACEHOLDER = {
     head:'visored-helm', amulet:'prayer-beads', shoulders:'shoulder-armor',
-    body:'breastplate', belt:'knot', weapon:'crossed-swords',
+    body:'breastplate', belt:'knot', legs:'kimono', weapon:'crossed-swords',
     offhand:'round-shield', ring:'diamond-ring',
     art1:'cut-diamond', art2:'crystal-ball', art3:'star-formation'
   };
@@ -2000,7 +2009,6 @@ function renderActions() {
     const leaveBtn = pvpMode ? `<button class="act" onclick="leaveArena()"><img class="gi" src="assets/icons/run.svg" alt=""> Покинуть бой</button>` : '';
     el.innerHTML = `
       <button class="act" onclick="attack()"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Атаковать</button>
-      <button class="act" onclick="defend()"><img class="gi" src="assets/icons/round-shield.svg" alt=""> Защита</button>
       ${pvpMode ? '' : `<button class="act" onclick="flee()"><img class="gi" src="assets/icons/run.svg" alt=""> Бежать</button>`}
       ${leaveBtn}
       <button class="act" onclick="document.querySelector('[data-tab=inv]').click()"><img class="gi" src="assets/icons/knapsack.svg" alt=""> Сумка</button>
@@ -2447,7 +2455,7 @@ function arenaEntryFromPlayer(p) {
     hp: p.hp|0, hpMax: p.hpMax|0,
     dmg: [0, 0], xp: 0, gold: [0, 0],
     lvl: p.lvl|0, loc: ['village'],
-    _dead: !!p.dead, _defending: !!p.defending,
+    _dead: !!p.dead,
   };
 }
 
@@ -2474,7 +2482,7 @@ function syncEsFromArena(players) {
       else log(`<span class="bad">${escapeHtml(p.username)} возвращается на арену!</span>`);
     } else {
       prev.hp = p.hp|0; prev.hpMax = p.hpMax|0;
-      prev._dead = !!p.dead; prev._defending = !!p.defending;
+      prev._dead = !!p.dead;
       prev.name = p.username + (p.cls?` (${p.cls})`:'');
       next.push(prev);
     }
@@ -2510,7 +2518,6 @@ async function pollArenaStateOnce() {
   if (P && pvpMode && j.me) {
     P.hp = j.me.hp|0;
     P.mp = j.me.mp|0;
-    if (j.me.defendUntil) P._defUntil = j.me.defendUntil;
     if (typeof j.me.pvp_kills === 'number') P.pvp_kills = j.me.pvp_kills;
     if (j.me.spellCd) P.spellCd = { ...(P.spellCd||{}), ...j.me.spellCd };
   }
@@ -2671,14 +2678,6 @@ async function arenaAttack() {
   render();
 }
 
-async function arenaDefend() {
-  const res = await arenaAction({ type:'defend' });
-  if (!res.ok || !res.j || !res.j.ok) return;
-  P._defUntil = res.j.defendUntil;
-  log(`<span class="info">Ты поднимаешь щит (≈1.5 сек).</span>`);
-  render();
-}
-
 async function arenaCast(key) {
   const s = SPELLS[key]; if (!s) return;
   const body = { type:'cast', spell: key };
@@ -2791,13 +2790,6 @@ function attack() {
   }
   finishPlayerTurn();
 }
-function defend() {
-  if (!inCombat) return;
-  if (pvpMode) { arenaDefend(); return; }
-  P._defUntil = Date.now() + 2500;
-  log(`<span class="info">Ты поднимаешь щит (≈2.5 сек).</span>`);
-  finishPlayerTurn(true);
-}
 function spellMul(key) { return 1 + 0.2 * ((P.spellLvl && P.spellLvl[key]) || 0); }
 function cast(key) {
   const s = SPELLS[key];
@@ -2890,7 +2882,6 @@ function combatTickFn() {
   if (!inCombat) { stopCombatLoop(); return; }
   const now = Date.now();
   if (pvpMode) {
-    if (P._defUntil && now > P._defUntil) { P._defUntil = 0; render(); }
     if (P.spellCd && Object.values(P.spellCd).some(t => t > now && t - now < 30200)) renderSpells();
     return;
   }
@@ -2912,7 +2903,6 @@ function combatTickFn() {
     lastRegen = now;
     changed = true;
   }
-  if (P._defUntil && now > P._defUntil) { P._defUntil = 0; changed = true; }
   if (changed) { render(); updateStageProgress(); }
 }
 function enemyAttack(e) {
@@ -2921,7 +2911,6 @@ function enemyAttack(e) {
     return;
   }
   let dmg = rnd(...e.dmg) - eff('armor');
-  if (P._defUntil && Date.now() < P._defUntil) dmg = Math.floor(dmg/2);
   dmg = Math.max(1, dmg);
   P.hp -= dmg;
   log(`<span class="bad">${e.name} бьёт тебя на ${dmg} урона.</span>`);
