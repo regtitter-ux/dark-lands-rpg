@@ -1,6 +1,6 @@
 {
   "name": "dark-lands-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "engines": { "node": ">=20" },
@@ -10,6 +10,8 @@
   "dependencies": {
     "express": "^4.21.1",
     "pg": "^8.13.1",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
   }
 }

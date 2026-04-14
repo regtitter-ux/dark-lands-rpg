@@ -264,9 +264,67 @@
   .gi.good { filter: brightness(0) saturate(100%) invert(72%) sepia(40%) saturate(610%) hue-rotate(55deg) brightness(95%) contrast(88%); }
   .gi.bad  { filter: brightness(0) saturate(100%) invert(45%) sepia(82%) saturate(3000%) hue-rotate(340deg) brightness(90%) contrast(95%); }
   .gi.magic{ filter: brightness(0) saturate(100%) invert(68%) sepia(30%) saturate(800%) hue-rotate(165deg) brightness(95%) contrast(90%); }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(5,3,2,0.75);
+    display: none; align-items: center; justify-content: center;
+    z-index: 9999; backdrop-filter: blur(2px);
+    animation: modalFade 0.15s ease-out;
+  }
+  .modal-overlay.show { display: flex; }
+  @keyframes modalFade { from { opacity: 0 } to { opacity: 1 } }
+  .modal-box {
+    min-width: 320px; max-width: 460px;
+    border: 2px solid #8b6f47;
+    background: linear-gradient(180deg, #2a1810, #1a0e08);
+    box-shadow: 0 0 20px rgba(0,0,0,0.9), inset 0 0 30px rgba(0,0,0,0.5);
+    color: #d4b87a;
+    animation: modalPop 0.2s ease-out;
+  }
+  @keyframes modalPop { from { transform: scale(0.92); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+  .modal-box h3 {
+    font-family: 'MedievalSharp', cursive;
+    background: linear-gradient(90deg, #4a2818, #6b4423, #4a2818);
+    color: #f4d03f; padding: 8px 14px; font-size: 15px;
+    letter-spacing: 1px; border-bottom: 1px solid #6b4423;
+    text-shadow: 1px 1px 0 #000;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .modal-box .modal-body {
+    padding: 16px 18px; font-size: 13px; line-height: 1.5;
+    color: #d4b87a; min-height: 40px;
+  }
+  .modal-box .modal-actions {
+    display: flex; justify-content: flex-end; gap: 8px;
+    padding: 10px 14px; border-top: 1px solid #4a2818;
+    background: rgba(0,0,0,0.3);
+  }
+  .modal-btn {
+    font-family: 'MedievalSharp', cursive;
+    padding: 6px 16px; min-width: 90px; cursor: pointer;
+    font-size: 13px; letter-spacing: 1px; text-shadow: 1px 1px 0 #000;
+    border: 2px outset #8b6f47; color: #f4d03f;
+    background: linear-gradient(180deg, #6b4423, #3a2010);
+    transition: all 0.12s;
+  }
+  .modal-btn:hover { background: linear-gradient(180deg, #8b5a2b, #4a2818); box-shadow: 0 0 8px rgba(244,208,63,0.5); }
+  .modal-btn:active { border-style: inset; transform: translateY(1px); }
+  .modal-btn.cancel { color: #a89577; border-color: #6b4423; background: linear-gradient(180deg, #3a2010, #1a0e08); }
+  .modal-btn.cancel:hover { color: #d4b87a; box-shadow: 0 0 6px rgba(107,68,35,0.6); }
+  .modal-btn.danger { color: #ff6b4a; }
 </style>
 </head>
 <body>
+<div id="confirm-modal" class="modal-overlay" role="dialog" aria-modal="true">
+  <div class="modal-box">
+    <h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> <span id="confirm-title">Подтверждение</span></h3>
+    <div class="modal-body" id="confirm-text"></div>
+    <div class="modal-actions">
+      <button type="button" class="modal-btn cancel" id="confirm-no">Отмена</button>
+      <button type="button" class="modal-btn" id="confirm-yes">Подтвердить</button>
+    </div>
+  </div>
+</div>
 <div class="frame">
   <header>
     <h1><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Сумрачные Земли <img class="gi" src="assets/icons/crossed-swords.svg" alt=""></h1>
@@ -964,6 +1022,7 @@ function save() {
       localStorage.setItem(SAVE_KEY, JSON.stringify({ P, Es, target, inCombat, unlocked, logHistory: logHistory.slice(-80) }));
       flashSave();
     } catch(e) {}
+    if (typeof scheduleCloudPush === 'function') scheduleCloudPush();
   }, 400);
 }
 function loadSave() {
@@ -982,8 +1041,39 @@ function loadSave() {
     return true;
   } catch(e) { return false; }
 }
-function newGame() {
-  if (P && !confirm('Удалить сохранение и начать новую игру?')) return;
+function confirmDialog(text, opts = {}) {
+  return new Promise(resolve => {
+    const overlay = $('confirm-modal');
+    const title = $('confirm-title');
+    const body = $('confirm-text');
+    const yes = $('confirm-yes');
+    const no = $('confirm-no');
+    title.textContent = opts.title || 'Подтверждение';
+    body.innerHTML = String(text).replace(/\n/g, '<br>');
+    yes.textContent = opts.okText || 'Подтвердить';
+    no.textContent = opts.cancelText || 'Отмена';
+    yes.classList.toggle('danger', !!opts.danger);
+    overlay.classList.add('show');
+    const cleanup = (result) => {
+      overlay.classList.remove('show');
+      yes.onclick = null; no.onclick = null;
+      overlay.onclick = null;
+      document.removeEventListener('keydown', onKey);
+      resolve(result);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); cleanup(false); }
+      else if (e.key === 'Enter') { e.preventDefault(); cleanup(true); }
+    };
+    yes.onclick = () => cleanup(true);
+    no.onclick = () => cleanup(false);
+    overlay.onclick = (e) => { if (e.target === overlay) cleanup(false); };
+    document.addEventListener('keydown', onKey);
+    setTimeout(() => yes.focus(), 30);
+  });
+}
+async function newGame() {
+  if (P && !(await confirmDialog('Удалить сохранение и начать новую игру?', { title:'Новая игра', okText:'Стереть и начать', danger:true }))) return;
   localStorage.removeItem(SAVE_KEY); location.reload();
 }
 let saveTimer=null;
@@ -1091,18 +1181,19 @@ document.querySelectorAll('.tab').forEach(t => {
   });
 });
 
-// ==================== ОБЛАЧНЫЙ ПРОФИЛЬ + РЕЙТИНГ ====================
+// ==================== АККАУНТ + ОБЛАЧНАЯ СИНХРОНИЗАЦИЯ ====================
 const API_BASE = 'https://dark-lands-rpg-production.up.railway.app';
-const CLOUD_KEY = 'sumrachnye_cloud_v1';
-function cloudLoad() { try { return JSON.parse(localStorage.getItem(CLOUD_KEY)) || {}; } catch { return {}; } }
-function cloudSet(o) { localStorage.setItem(CLOUD_KEY, JSON.stringify(o)); }
-function cloudUuid() { return cloudLoad().uuid || null; }
-function cloudNick() { return cloudLoad().nick || null; }
+const AUTH_KEY = 'sumrachnye_auth_v2';
+function authLoad() { try { return JSON.parse(localStorage.getItem(AUTH_KEY)) || {}; } catch { return {}; } }
+function authSet(o) { localStorage.setItem(AUTH_KEY, JSON.stringify(o)); }
+function authClear() { localStorage.removeItem(AUTH_KEY); }
+function authToken() { return authLoad().token || null; }
+function authUsername() { return authLoad().username || null; }
+function cloudNick() { return authUsername(); }
 function statsForSync() {
   if (!P) return null;
   const stageMax = Math.max(1, ...Object.values(P.stages || {1:1}));
   return {
-    nick: cloudNick(),
     cls: P.cls,
     lvl: P.lvl|0,
     stage_max: stageMax,
@@ -1111,36 +1202,69 @@ function statsForSync() {
     save_blob: { P, unlocked },
   };
 }
-async function cloudRegister(nick) {
-  const r = await fetch(API_BASE+'/api/register', {
+async function authRegister(username, password) {
+  const r = await fetch(API_BASE+'/api/auth/register', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ nick })
+    body: JSON.stringify({ username, password })
   });
   const j = await r.json();
   if (!r.ok) throw new Error(j.error || 'register failed');
-  cloudSet({ uuid:j.uuid, nick:j.nick });
+  authSet({ token:j.token, username:j.username });
   return j;
 }
-async function cloudSync() {
-  const uuid = cloudUuid(); if (!uuid) return;
-  const s = statsForSync(); if (!s) return;
-  const r = await fetch(API_BASE+'/api/save', {
-    method:'POST', headers:{'Content-Type':'application/json','x-uuid':uuid},
-    body: JSON.stringify(s)
+async function authLogin(username, password) {
+  const r = await fetch(API_BASE+'/api/auth/login', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ username, password })
   });
-  if (!r.ok) { const j = await r.json().catch(()=>({})); throw new Error(j.error || 'save failed'); }
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || 'login failed');
+  authSet({ token:j.token, username:j.username });
+  return j;
+}
+let cloudPushTimer = null;
+let cloudPushing = false;
+function scheduleCloudPush() {
+  if (!authToken() || !P) return;
+  if (cloudPushTimer) return;
+  cloudPushTimer = setTimeout(() => {
+    cloudPushTimer = null;
+    cloudSync().catch(()=>{});
+  }, 2000);
+}
+async function cloudSync() {
+  const tok = authToken(); if (!tok) return;
+  const s = statsForSync(); if (!s) return;
+  if (cloudPushing) return;
+  cloudPushing = true;
+  try {
+    const r = await fetch(API_BASE+'/api/save', {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization':'Bearer '+tok},
+      body: JSON.stringify(s)
+    });
+    if (r.status === 401) { authClear(); renderCloudPanel(); throw new Error('сессия истекла'); }
+    if (!r.ok) { const j = await r.json().catch(()=>({})); throw new Error(j.error || 'save failed'); }
+  } finally { cloudPushing = false; }
 }
 async function cloudPull() {
-  const uuid = cloudUuid(); if (!uuid) throw new Error('нет UUID');
-  const r = await fetch(API_BASE+'/api/load?uuid='+encodeURIComponent(uuid));
+  const tok = authToken(); if (!tok) throw new Error('нет токена');
+  const r = await fetch(API_BASE+'/api/me', { headers:{'Authorization':'Bearer '+tok} });
+  if (r.status === 401) { authClear(); renderCloudPanel(); throw new Error('сессия истекла'); }
   const j = await r.json();
   if (!r.ok) throw new Error(j.error || 'load failed');
-  if (!j.save_blob || !j.save_blob.P) throw new Error('пустой сейв');
-  if (!confirm('Заменить текущий прогресс облачным? (текущий локальный сейв будет потерян)')) return;
+  if (!j.save_blob || !j.save_blob.P) throw new Error('в облаке пусто');
+  if (!(await confirmDialog('Заменить текущий прогресс облачным?<br><span style="color:#cf4030">Текущий локальный сейв будет потерян.</span>', { title:'Загрузка из облака', okText:'Заменить', danger:true }))) return;
   P = j.save_blob.P;
   unlocked = j.save_blob.unlocked || unlocked;
   Es = []; target = 0; inCombat = false;
   save(); render(); renderCloudPanel();
+}
+async function doLogout() {
+  if (!(await confirmDialog('Выйти из аккаунта?<br><span style="color:#8b6f47">Локальный сейв останется на этом устройстве.</span>', { title:'Выход', okText:'Выйти' }))) return;
+  authClear();
+  if (cloudPushTimer) { clearTimeout(cloudPushTimer); cloudPushTimer = null; }
+  renderCloudPanel(); fetchLeaderboard();
 }
 async function fetchLeaderboard() {
   const el = $('leaders-body');
@@ -1178,36 +1302,56 @@ async function fetchLeaderboard() {
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function renderCloudPanel() {
   const el = $('cloud-body'); if (!el) return;
-  const nick = cloudNick();
-  if (!nick) {
+  const user = authUsername();
+  if (!user) {
     el.innerHTML = `
-      <div style="color:#8b6f47;font-size:12px;margin-bottom:6px">Зарегистрируй ник, чтобы попасть в рейтинг и получить облачный сейв.</div>
-      <input id="cloud-nick" placeholder="ник (2-24 симв.)" maxlength="24" style="background:#1a0f08;border:1px solid #6b4423;color:#d4b87a;padding:4px 6px;font-family:inherit;width:60%">
-      <button class="tiny" onclick="doCloudRegister()">Регистрация</button>
+      <div style="color:#8b6f47;font-size:12px;margin-bottom:6px">Зарегистрируйся или войди — прогресс будет сохраняться в облако автоматически.</div>
+      <div style="display:flex;flex-direction:column;gap:4px;max-width:320px">
+        <input id="auth-user" placeholder="логин (2-24 симв.)" maxlength="24" style="background:#1a0f08;border:1px solid #6b4423;color:#d4b87a;padding:4px 6px;font-family:inherit">
+        <input id="auth-pass" type="password" placeholder="пароль (мин. 6 симв.)" maxlength="128" style="background:#1a0f08;border:1px solid #6b4423;color:#d4b87a;padding:4px 6px;font-family:inherit">
+        <div style="display:flex;gap:6px">
+          <button class="tiny" onclick="doAuthLogin()">Войти</button>
+          <button class="tiny" onclick="doAuthRegister()">Регистрация</button>
+        </div>
+      </div>
       <div id="cloud-msg" style="color:#cf4030;font-size:11px;margin-top:6px"></div>`;
     return;
   }
   el.innerHTML = `
-    <div style="color:#d4b87a;font-size:12px">Ник: <b style="color:#f4d03f">${escapeHtml(nick)}</b></div>
+    <div style="color:#d4b87a;font-size:12px">Аккаунт: <b style="color:#f4d03f">${escapeHtml(user)}</b> <span style="color:#6abe30">● авто-синк</span></div>
     <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
-      <button class="tiny" onclick="doCloudSync()">Сохранить в облако</button>
+      <button class="tiny" onclick="doCloudSync()">Синхр. сейчас</button>
       <button class="tiny" onclick="doCloudPull()">Загрузить из облака</button>
+      <button class="tiny" onclick="doLogout()">Выйти</button>
     </div>
     <div id="cloud-msg" style="color:#6abe30;font-size:11px;margin-top:6px"></div>`;
 }
-async function doCloudRegister() {
-  const el = document.getElementById('cloud-nick');
+async function doAuthRegister() {
   const msg = document.getElementById('cloud-msg');
-  const nick = (el.value||'').trim();
-  if (nick.length < 2) { msg.textContent='ник минимум 2 символа'; return; }
+  const u = (document.getElementById('auth-user').value||'').trim();
+  const p = document.getElementById('auth-pass').value||'';
+  if (u.length < 2) { msg.textContent='логин минимум 2 символа'; return; }
+  if (p.length < 6) { msg.textContent='пароль минимум 6 символов'; return; }
+  msg.style.color='#5fb3d4'; msg.textContent='регистрация...';
   try {
-    await cloudRegister(nick);
+    await authRegister(u, p);
     await cloudSync();
     renderCloudPanel(); fetchLeaderboard();
-    log(`<span class="good">Облачный профиль создан: ${escapeHtml(nick)}.</span>`);
-  } catch (e) {
-    msg.textContent = e.message;
-  }
+    log(`<span class="good">Аккаунт создан: ${escapeHtml(u)}.</span>`);
+  } catch (e) { msg.style.color='#cf4030'; msg.textContent = e.message; }
+}
+async function doAuthLogin() {
+  const msg = document.getElementById('cloud-msg');
+  const u = (document.getElementById('auth-user').value||'').trim();
+  const p = document.getElementById('auth-pass').value||'';
+  if (!u || !p) { msg.textContent='введи логин и пароль'; return; }
+  msg.style.color='#5fb3d4'; msg.textContent='вход...';
+  try {
+    await authLogin(u, p);
+    renderCloudPanel(); fetchLeaderboard();
+    log(`<span class="good">Вход: ${escapeHtml(u)}.</span>`);
+    await cloudSync();
+  } catch (e) { msg.style.color='#cf4030'; msg.textContent = e.message; }
 }
 async function doCloudSync() {
   const msg = document.getElementById('cloud-msg');
@@ -1220,8 +1364,8 @@ async function doCloudPull() {
   try { await cloudPull(); msg.style.color='#6abe30'; msg.textContent='загружено из облака ✓'; }
   catch (e) { msg.style.color='#cf4030'; msg.textContent=e.message; }
 }
-// Auto-sync every 60s if registered
-setInterval(() => { if (cloudUuid() && P) cloudSync().catch(()=>{}); }, 60000);
+// safety-net periodic push (save() already triggers scheduleCloudPush)
+setInterval(() => { if (authToken() && P) cloudSync().catch(()=>{}); }, 60000);
 
 function startGame(name, cls) {
   const c = CLASSES[cls];
