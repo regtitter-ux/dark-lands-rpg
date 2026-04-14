@@ -384,7 +384,6 @@
         <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Завершённые</h3><div class="body" id="done-body" style="font-size:11px"></div></div>
       </div>
       <div id="tab-leaders" style="display:none">
-        <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Облачный профиль</h3><div class="body" id="cloud-body"></div></div>
         <div class="panel"><h3><img class="gi" src="assets/icons/star-formation.svg" alt=""> Топ-50 героев</h3><div class="body" id="leaders-body" style="font-size:12px">загрузка...</div></div>
       </div>
     </div>
@@ -394,6 +393,7 @@
     © 200X • Сумрачные Земли • all rights reserved • лучше всего просматривать в Internet Explorer 6
     &nbsp;•&nbsp; <a href="#" onclick="newGame();return false;">[начать заново]</a>
     &nbsp;•&nbsp; <span id="save-indicator" style="color:#4a2818">○ сохранено</span>
+    &nbsp;•&nbsp; <span id="auth-indicator" style="color:#6b4423"></span>
     &nbsp;•&nbsp; иконки: <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a> (<a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>)
   </footer>
 </div>
@@ -402,6 +402,7 @@
   <div class="modal">
     <h2><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Добро пожаловать, странник <img class="gi" src="assets/icons/crossed-swords.svg" alt=""></h2>
     <p>Сумрачные Земли ждут нового героя. Назови себя и выбери свой путь.</p>
+    <div id="cloud-body" style="margin:10px auto 14px;max-width:420px;border:1px solid #6b4423;background:rgba(20,10,5,0.5);padding:10px 12px"></div>
     <p style="text-align:center"><input type="text" id="name-input" placeholder="Имя героя" maxlength="16" value="Безымянный"></p>
     <div class="classes">
       <div class="cls" data-cls="warrior"><div class="ico"><img class="gi" src="assets/icons/barbarian.svg" alt=""></div><div class="nm">Воин</div><div class="desc">Сила и стойкость. Тяжёлый меч.</div></div>
@@ -1171,13 +1172,14 @@ if (loadSave() && P) {
     startCombatLoop();
   }
 }
+renderCloudPanel();
 
 document.querySelectorAll('.tab').forEach(t => {
   t.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
     t.classList.add('active');
     ['inv','map','quest','leaders'].forEach(k => $('tab-'+k).style.display = (k===t.dataset.tab?'block':'none'));
-    if (t.dataset.tab === 'leaders') { renderCloudPanel(); fetchLeaderboard(); }
+    if (t.dataset.tab === 'leaders') { fetchLeaderboard(); }
   });
 });
 
@@ -1300,31 +1302,50 @@ async function fetchLeaderboard() {
   }
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function renderAuthIndicator() {
+  const ind = $('auth-indicator'); if (!ind) return;
+  const user = authUsername();
+  if (user) {
+    ind.style.color = '#6abe30';
+    ind.innerHTML = `● <b style="color:#f4d03f">${escapeHtml(user)}</b> <a href="#" onclick="doLogout();return false;" style="color:#8b6f47">[выйти]</a>`;
+  } else {
+    ind.style.color = '#6b4423';
+    ind.textContent = '○ оффлайн';
+  }
+}
 function renderCloudPanel() {
+  renderAuthIndicator();
   const el = $('cloud-body'); if (!el) return;
   const user = authUsername();
   if (!user) {
     el.innerHTML = `
-      <div style="color:#8b6f47;font-size:12px;margin-bottom:6px">Зарегистрируйся или войди — прогресс будет сохраняться в облако автоматически.</div>
-      <div style="display:flex;flex-direction:column;gap:4px;max-width:320px">
+      <div style="color:#8b6f47;font-size:12px;margin-bottom:6px;text-align:center">Войди или зарегистрируйся, чтобы прогресс сохранялся в облако и попал в рейтинг.</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
         <input id="auth-user" placeholder="логин (2-24 симв.)" maxlength="24" style="background:#1a0f08;border:1px solid #6b4423;color:#d4b87a;padding:4px 6px;font-family:inherit">
         <input id="auth-pass" type="password" placeholder="пароль (мин. 6 симв.)" maxlength="128" style="background:#1a0f08;border:1px solid #6b4423;color:#d4b87a;padding:4px 6px;font-family:inherit">
-        <div style="display:flex;gap:6px">
+        <div style="display:flex;gap:6px;justify-content:center;margin-top:2px">
           <button class="tiny" onclick="doAuthLogin()">Войти</button>
           <button class="tiny" onclick="doAuthRegister()">Регистрация</button>
+          <button class="tiny" onclick="doSkipAuth()" style="opacity:0.7">Пропустить</button>
         </div>
       </div>
-      <div id="cloud-msg" style="color:#cf4030;font-size:11px;margin-top:6px"></div>`;
+      <div id="cloud-msg" style="color:#cf4030;font-size:11px;margin-top:6px;text-align:center;min-height:14px"></div>`;
     return;
   }
   el.innerHTML = `
-    <div style="color:#d4b87a;font-size:12px">Аккаунт: <b style="color:#f4d03f">${escapeHtml(user)}</b> <span style="color:#6abe30">● авто-синк</span></div>
-    <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
-      <button class="tiny" onclick="doCloudSync()">Синхр. сейчас</button>
+    <div style="color:#d4b87a;font-size:12px;text-align:center">Аккаунт: <b style="color:#f4d03f">${escapeHtml(user)}</b> <span style="color:#6abe30">● авто-синк</span></div>
+    <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center">
+      <button class="tiny" onclick="doCloudSync()">Синхр.</button>
       <button class="tiny" onclick="doCloudPull()">Загрузить из облака</button>
       <button class="tiny" onclick="doLogout()">Выйти</button>
     </div>
-    <div id="cloud-msg" style="color:#6abe30;font-size:11px;margin-top:6px"></div>`;
+    <div id="cloud-msg" style="color:#6abe30;font-size:11px;margin-top:6px;text-align:center;min-height:14px"></div>`;
+  const ni = $('name-input');
+  if (ni && (ni.value === 'Безымянный' || !ni.value)) ni.value = user;
+}
+function doSkipAuth() {
+  const el = $('cloud-body');
+  if (el) el.style.display = 'none';
 }
 async function doAuthRegister() {
   const msg = document.getElementById('cloud-msg');
