@@ -2009,14 +2009,7 @@ function renderActions() {
   if (loc.actions.includes('rest')) btns.push(`<button class="act" onclick="rest()"><img class="gi" src="assets/icons/sleepy.svg" alt=""> Отдохнуть</button>`);
   if (loc.actions.includes('shop')) btns.push(`<button class="act" onclick="openShop()"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Лавка</button>`);
   if (loc.actions.includes('inn'))  btns.push(`<button class="act" onclick="inn()"><img class="gi" src="assets/icons/beer-stein.svg" alt=""> Трактир</button>`);
-  if (loc.actions.includes('arena')) {
-    if (onArena) {
-      btns.push(`<button class="act" onclick="arena()"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Искать соперников</button>`);
-      btns.push(`<button class="act" onclick="leaveArena()"><img class="gi" src="assets/icons/run.svg" alt=""> Покинуть арену</button>`);
-    } else {
-      btns.push(`<button class="act" onclick="arena()"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Круговая арена</button>`);
-    }
-  }
+  if (loc.actions.includes('arena') && !onArena) btns.push(`<button class="act" onclick="arena()"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Круговая арена</button>`);
   el.innerHTML = btns.join('');
 }
 
@@ -2470,15 +2463,58 @@ function leaveArenaBeacon() {
 }
 window.addEventListener('pagehide', leaveArenaBeacon);
 window.addEventListener('beforeunload', leaveArenaBeacon);
+let arenaKilledSet = new Set();
+function arenaReconcile(list) {
+  if (!Es) Es = [];
+  const fresh = list.filter(p => !arenaKilledSet.has(p.id));
+  const presentIds = new Set(fresh.map(p => p.id));
+  for (const e of Es) {
+    if (e._pvp && e.hp > 0 && !presentIds.has(e._pvpTargetId)) {
+      log(`<span class="info">${escapeHtml(e.name)} покинул арену.</span>`);
+    }
+  }
+  const kept = Es.filter(e => e._pvp && e.hp > 0 && presentIds.has(e._pvpTargetId));
+  const keptIds = new Set(kept.map(e => e._pvpTargetId));
+  for (const p of fresh) {
+    if (keptIds.has(p.id)) continue;
+    const ne = buildArenaEnemy(p);
+    scheduleEnemy(ne, true);
+    kept.push(ne);
+    log(`<span class="bad">На арене появился ${escapeHtml(ne.name)}!</span>`);
+  }
+  Es = kept;
+  target = 0;
+  ensureTarget();
+  render();
+}
+async function refreshArenaRoster(afterVictory=false) {
+  let list = [];
+  try {
+    const r = await fetch(API_BASE+'/api/arena/heartbeat', {
+      method:'POST',
+      headers:{'Authorization':'Bearer '+authToken()}
+    });
+    const j = await r.json();
+    list = Array.isArray(j.players) ? j.players : [];
+  } catch {}
+  if (afterVictory) {
+    const fresh = list.filter(p => !arenaKilledSet.has(p.id));
+    Es = fresh.slice(0, 6).map(buildArenaEnemy);
+    for (const e of Es) scheduleEnemy(e, true);
+    target = 0;
+    if (!Es.length) log(`<span class="info">Арена пуста. Ждёшь новых соперников...</span>`);
+    else log(`<span class="bad">Новые соперники: ${Es.map(e=>escapeHtml(e.name)).join(', ')}.</span>`);
+    render();
+  } else {
+    arenaReconcile(list);
+  }
+}
 function startArenaHeartbeat() {
   stopArenaHeartbeat();
   arenaHeartbeat = setInterval(() => {
     if (!onArena) { stopArenaHeartbeat(); return; }
-    fetch(API_BASE+'/api/arena/heartbeat', {
-      method:'POST',
-      headers:{'Authorization':'Bearer '+authToken()}
-    }).catch(()=>{});
-  }, 10000);
+    refreshArenaRoster(false);
+  }, 3000);
 }
 async function arena() {
   if (inCombat) return;
@@ -2497,21 +2533,18 @@ async function arena() {
     return;
   }
   onArena = true;
+  arenaKilledSet = new Set();
   startArenaHeartbeat();
   hr();
-  log(`<span class="sys"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> — Круговая арена —</span>`);
-  if (!list.length) {
-    log(`<span class="info">Арена пуста — ты здесь один. Жди соперников или загляни позже.</span>`);
-    render();
-    return;
-  }
+  log(`<span class="sys"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> — Круговая арена: бой не прекращается, пока ты здесь —</span>`);
   Es = list.slice(0, 6).map(buildArenaEnemy);
   for (const e of Es) scheduleEnemy(e, true);
   target = 0;
   pvpMode = true;
   inCombat = true;
   startCombatLoop();
-  log(`<span class="bad">Все против всех! Соперники: ${Es.map(e=>e.name).join(', ')}.</span>`);
+  if (Es.length) log(`<span class="bad">Соперники: ${Es.map(e=>escapeHtml(e.name)).join(', ')}.</span>`);
+  else log(`<span class="info">На арене ты пока один. Ждёшь соперников...</span>`);
   render();
 }
 async function resolveArenaFight(targetId, won) {
@@ -2527,8 +2560,9 @@ async function resolveArenaFight(targetId, won) {
   } catch { return null; }
 }
 async function onArenaEnemyDeath(e) {
-  if (e._pvpResolved) return;
+  if (e._pvpResolved || e._left) return;
   e._pvpResolved = true;
+  arenaKilledSet.add(e._pvpTargetId);
   const j = await resolveArenaFight(e._pvpTargetId, true);
   if (!j) return;
   const delta = j.gold_delta|0;
@@ -2803,10 +2837,8 @@ function cascadeOverflow(pool) {
 
 function winFight() {
   if (pvpMode) {
-    hr();
-    log(`<span class="epic"><img class="gi" src="assets/icons/star-formation.svg" alt=""> Арена зачищена! Ты остаёшься на арене — можно звать новых соперников или покинуть её.</span>`);
-    stopCombatLoop(); inCombat=false; pvpMode=false; Es=[]; target=0;
-    render();
+    log(`<span class="good">Соперники повержены. Бой на арене продолжается — ищем новых...</span>`);
+    refreshArenaRoster(true);
     return;
   }
   awardKillsLoot(Es);
