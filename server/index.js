@@ -319,6 +319,44 @@ app.post('/api/market/trade', auth, (req, res) => {
   return res.status(400).json({ error: 'bad action' });
 });
 
+// ==================== VILLAGE FEED ====================
+const villageFeed = [];
+const FEED_TTL_MS = 300000;
+const FEED_MAX = 120;
+function emitFeed(text, actorId = null, victimId = null) {
+  villageFeed.push({ t: Date.now(), text, actor: actorId, victim: victimId });
+  const cutoff = Date.now() - FEED_TTL_MS;
+  while (villageFeed.length && villageFeed[0].t < cutoff) villageFeed.shift();
+  if (villageFeed.length > FEED_MAX) villageFeed.splice(0, villageFeed.length - FEED_MAX);
+}
+const FEED_ENTER = [
+  a => `${a} выходит на песок арены, бряцая оружием.`,
+  a => `${a} ступает в круг арены — взгляд холоден.`,
+  a => `${a} бросает вызов всем, кто на арене.`,
+  a => `${a} появляется у ворот арены под ропот толпы.`,
+  a => `${a} обнажает клинок и вступает на арену.`,
+];
+const FEED_LEAVE = [
+  a => `${a} покидает арену, зализывая раны.`,
+  a => `${a} исчезает в тени ворот арены.`,
+  a => `${a} уходит с арены, не глядя назад.`,
+  a => `${a} растворяется в пыли арены.`,
+  a => `${a} отступает с арены — видимо, хватило на сегодня.`,
+];
+const FEED_KILL = [
+  (a,b) => `${a} сокрушает ${b} на арене.`,
+  (a,b) => `Клинок ${a} находит сердце ${b}.`,
+  (a,b) => `${a} отправляет ${b} в небытие.`,
+  (a,b) => `${a} вписывает имя ${b} в список павших.`,
+  (a,b) => `${a} повергает ${b} в прах.`,
+  (a,b) => `${a} ставит точку в судьбе ${b}.`,
+  (a,b) => `На арене пал ${b} от клинка ${a}.`,
+  (a,b) => `${a} одерживает верх над ${b} в кровавой схватке.`,
+  (a,b) => `${b} не устоял против ${a} — арена запомнит.`,
+  (a,b) => `${a} обращает ${b} в тень и пыль.`,
+];
+function pickTpl(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
 // ==================== PVP ARENA ====================
 const arena = new Map(); // userId -> { username, cls, lvl, gold, pvp_kills, hp_max, lastSeen }
 const ARENA_TIMEOUT_MS = 30000;
@@ -348,6 +386,7 @@ app.post('/api/arena/enter', auth, async (req, res) => {
     );
     if (!r.rowCount) return res.status(404).json({ error: 'not found' });
     const row = r.rows[0];
+    const wasPresent = arena.has(req.user.uid);
     arena.set(req.user.uid, {
       username: row.username,
       cls: row.cls,
@@ -357,6 +396,7 @@ app.post('/api/arena/enter', auth, async (req, res) => {
       hp_max: (row.save_blob && row.save_blob.P && (row.save_blob.P.hpMax|0)) || null,
       lastSeen: Date.now(),
     });
+    if (!wasPresent) emitFeed(pickTpl(FEED_ENTER)(row.username), req.user.uid);
     res.json({ ok: true, players: arenaListFor(req.user.uid) });
   } catch (e) {
     console.error(e);
@@ -365,16 +405,32 @@ app.post('/api/arena/enter', auth, async (req, res) => {
 });
 
 app.post('/api/arena/leave', auth, (req, res) => {
+  const p = arena.get(req.user.uid);
   arena.delete(req.user.uid);
+  if (p) emitFeed(pickTpl(FEED_LEAVE)(p.username), req.user.uid);
   res.json({ ok: true });
 });
 
 app.post('/api/arena/leave-beacon', (req, res) => {
   const t = req.query.t;
   if (t) {
-    try { const u = jwt.verify(t, JWT_SECRET); arena.delete(u.uid); } catch {}
+    try {
+      const u = jwt.verify(t, JWT_SECRET);
+      const p = arena.get(u.uid);
+      arena.delete(u.uid);
+      if (p) emitFeed(pickTpl(FEED_LEAVE)(p.username), u.uid);
+    } catch {}
   }
   res.status(204).end();
+});
+
+app.get('/api/village/feed', auth, (req, res) => {
+  const since = parseInt(req.query.since)|0;
+  const uid = req.user.uid;
+  const events = villageFeed
+    .filter(ev => ev.t > since && ev.actor !== uid && ev.victim !== uid)
+    .map(ev => ({ t: ev.t, text: ev.text }));
+  res.json({ events, now: Date.now() });
 });
 
 app.post('/api/arena/heartbeat', auth, (req, res) => {
@@ -416,6 +472,15 @@ app.post('/api/arena/resolve', auth, async (req, res) => {
       [pendingForWinner, winnerId]
     );
     await client.query('COMMIT');
+    // Kill feed (covered by the kill event, no separate leave)
+    const winnerName = (arena.get(winnerId) || {}).username
+      || (await pool.query(`SELECT username FROM users WHERE id=$1`, [winnerId])).rows[0]?.username
+      || 'кто-то';
+    const loserName  = (arena.get(loserId) || {}).username
+      || (await pool.query(`SELECT username FROM users WHERE id=$1`, [loserId])).rows[0]?.username
+      || 'кто-то';
+    emitFeed(pickTpl(FEED_KILL)(winnerName, loserName), winnerId, loserId);
+    arena.delete(loserId);
     res.json({
       ok: true, won, transfer,
       gold_delta: won ? +transfer : -transfer,

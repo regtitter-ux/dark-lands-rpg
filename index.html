@@ -2463,6 +2463,24 @@ function leaveArenaBeacon() {
 }
 window.addEventListener('pagehide', leaveArenaBeacon);
 window.addEventListener('beforeunload', leaveArenaBeacon);
+
+let villageFeedSince = Date.now();
+setInterval(async () => {
+  if (!authToken() || !P || P.location !== 'village') return;
+  try {
+    const r = await fetch(API_BASE+'/api/village/feed?since='+villageFeedSince, {
+      headers:{'Authorization':'Bearer '+authToken()}
+    });
+    if (!r.ok) return;
+    const j = await r.json();
+    if (typeof j.now === 'number') villageFeedSince = j.now;
+    if (Array.isArray(j.events)) {
+      for (const ev of j.events) {
+        log(`<span class="info"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> ${escapeHtml(ev.text)}</span>`);
+      }
+    }
+  } catch {}
+}, 3000);
 let arenaKilledSet = new Set();
 function arenaReconcile(list) {
   if (!Es) Es = [];
