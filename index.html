@@ -1,0 +1,2238 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Сумрачные Земли — браузерная РПГ</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=MedievalSharp&family=PT+Serif:wght@400;700&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'PT Serif', Georgia, serif;
+    background:
+      radial-gradient(ellipse at top, #2a1810 0%, #0d0604 70%),
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.9'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/></svg>");
+    color: #d4b483;
+    padding: 8px;
+    font-size: 14px;
+    overflow: hidden;
+  }
+  .frame {
+    max-width: 1280px;
+    height: calc(100vh - 16px);
+    margin: 0 auto;
+    border: 3px double #6b4423;
+    background: linear-gradient(180deg, #1a0e08 0%, #0f0805 100%);
+    box-shadow: 0 0 40px rgba(0,0,0,0.9), inset 0 0 30px rgba(107,68,35,0.2);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  header {
+    text-align: center; padding: 8px;
+    border-bottom: 2px solid #6b4423;
+    background: linear-gradient(90deg, #2a1810, #4a2818, #2a1810);
+    flex-shrink: 0;
+  }
+  header h1 { font-family: 'MedievalSharp', cursive; font-size: 24px; color: #f4d03f; text-shadow: 0 0 10px rgba(244,208,63,0.5), 2px 2px 0 #000; letter-spacing: 3px; }
+  header .sub { font-size: 11px; color: #8b6f47; font-style: italic; margin-top: 2px; }
+
+  .layout { display: grid; grid-template-columns: 240px 1fr 260px; gap: 0; flex: 1; min-height: 0; overflow: hidden; }
+  .col { padding: 10px; overflow-y: auto; }
+  .col.left, .col.right { background: rgba(0,0,0,0.3); border-left: 1px solid #4a2818; border-right: 1px solid #4a2818; }
+  .col.center { padding: 12px; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+
+  .panel {
+    border: 1px solid #6b4423;
+    background: linear-gradient(180deg, rgba(40,20,10,0.6), rgba(20,10,5,0.6));
+    margin-bottom: 10px;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+  }
+  .panel h3 {
+    font-family: 'MedievalSharp', cursive;
+    background: linear-gradient(90deg, #4a2818, #6b4423, #4a2818);
+    color: #f4d03f; padding: 6px 10px; font-size: 14px;
+    letter-spacing: 1px; border-bottom: 1px solid #6b4423; text-shadow: 1px 1px 0 #000;
+  }
+  .panel .body { padding: 8px 10px; }
+
+  .stat-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dotted #4a2818; font-size: 13px; }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row span:last-child { color: #f4d03f; font-weight: bold; }
+  .stat-row .bonus { color: #6abe30; font-size: 11px; margin-left: 4px; }
+
+  .bar { position: relative; height: 16px; background: #1a0e08; border: 1px solid #6b4423; margin: 4px 0; overflow: hidden; }
+  .bar .ghost { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: #f4d03f; opacity: 0.55; transition: width 0.55s ease-out 0.25s; z-index: 0; }
+  .bar .fill { position: relative; height: 100%; transition: width 0.12s linear; z-index: 1; }
+  .bar .label { position: absolute; inset: 0; text-align: center; font-size: 11px; line-height: 16px; color: #e8d8b8; text-shadow: 1px 1px 0 #000, 0 0 2px #000; font-weight: normal; z-index: 2; }
+  .bar.hp .fill { background: linear-gradient(90deg, #8b0000, #d12626); }
+  .bar.hp .ghost { background: #f4e06a; }
+  .bar.mp .fill { background: linear-gradient(90deg, #1a3a8b, #3a6dd1); }
+  .bar.xp .fill { background: linear-gradient(90deg, #5a3a00, #f4d03f); }
+
+  .log { flex: 1; min-height: 120px; overflow-y: auto; border: 2px inset #4a2818; background: #0a0503; padding: 10px; font-size: 13px; line-height: 1.6; }
+  .log p { margin-bottom: 4px; }
+  .log .sys { color: #8b6f47; font-style: italic; }
+  .log .good { color: #6abe30; }
+  .log .bad { color: #d12626; }
+  .log .gold { color: #f4d03f; }
+  .log .magic { color: #b97aff; }
+  .log .info { color: #5fb3d4; }
+  .log .epic { color: #ff8c00; font-weight: bold; }
+  .log .quest { color: #f4d03f; }
+  .log hr { border: none; border-top: 1px dashed #4a2818; margin: 6px 0; }
+  .center-top { flex-shrink: 0; }
+  .panel.log-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; margin-bottom: 8px; }
+  .panel.log-panel .body { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 6px; }
+  .actions { flex-shrink: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
+
+  button.act {
+    font-family: 'MedievalSharp', cursive;
+    background: linear-gradient(180deg, #6b4423, #3a2010);
+    color: #f4d03f; border: 2px outset #8b6f47; padding: 10px 6px;
+    cursor: pointer; font-size: 13px; letter-spacing: 1px; text-shadow: 1px 1px 0 #000;
+    transition: all 0.15s;
+  }
+  button.act:hover:not(:disabled) { background: linear-gradient(180deg, #8b5a2b, #4a2818); box-shadow: 0 0 8px rgba(244,208,63,0.5); }
+  button.act:active:not(:disabled) { border-style: inset; transform: translateY(1px); }
+  button.act:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.small {
+    font-family: 'PT Serif', serif; font-size: 11px; padding: 4px 6px;
+    background: linear-gradient(180deg, #4a2818, #2a1810);
+    border: 1px outset #6b4423; color: #d4b483; cursor: pointer;
+    margin: 2px 0; width: 100%; text-align: left;
+  }
+  button.small:hover:not(:disabled) { background: linear-gradient(180deg, #6b4423, #3a2010); color: #f4d03f; }
+  button.small:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.tiny { font-size: 10px; padding: 2px 6px; cursor: pointer; background: linear-gradient(180deg, #6b4423, #3a2010); color: #f4d03f; border: 1px outset #8b6f47; font-family: 'PT Serif', serif; }
+  button.tiny:hover:not(:disabled) { background: linear-gradient(180deg, #8b5a2b, #4a2818); }
+  button.tiny:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .scene-strip { display: flex; gap: 8px; align-items: stretch; margin-bottom: 8px; }
+  .scene-box { flex: 1; display: flex; gap: 10px; align-items: center; padding: 8px 12px; border: 2px ridge #6b4423; background: radial-gradient(ellipse, #1a0e08, #0a0503); }
+  .scene-box .ico { font-size: 42px; line-height: 1; }
+  .scene-box .txt { flex: 1; }
+  .scene-box .nm { font-family: 'MedievalSharp', cursive; font-size: 16px; color: #f4d03f; text-shadow: 1px 1px 0 #000; }
+  .scene-box .ds { font-style: italic; color: #8b6f47; font-size: 11px; }
+
+  .enemies-area { flex: 1.4; display: flex; gap: 0; min-width: 0; overflow: hidden; }
+
+  .stage-bar { display: flex; align-items: center; gap: 0; padding: 4px 10px; margin-top: 6px; background: linear-gradient(180deg, #1a0e08, #0a0503); border: 2px ridge #6b4423; border-radius: 4px; }
+  .stage-bar .label { font-family: 'MedievalSharp', cursive; color: #d4b87a; font-size: 11px; margin-right: 8px; white-space: nowrap; text-shadow: 1px 1px 0 #000; }
+  .stage-chk { position: relative; width: 20px; height: 20px; border-radius: 50%; background: #2a1810; border: 2px solid #4a2818; color: #8b6f47; font-family: 'MedievalSharp', cursive; font-size: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s; line-height: 1; }
+  .stage-chk.done { background: radial-gradient(ellipse, #3d5a2a, #1a2a10); border-color: #6abe30; color: #d4e9b0; }
+  .stage-chk.cur { background: radial-gradient(ellipse, #8b6f2a, #3d2a0a); border-color: #f4d03f; color: #fff; box-shadow: 0 0 10px rgba(244,208,63,0.8); transform: scale(1.2); z-index: 2; }
+  .stage-chk.boss { background: radial-gradient(ellipse, #5a1a1a, #2a0505); border-color: #d04040; color: #f4a040; font-weight: bold; box-shadow: 0 0 5px rgba(208,64,64,0.5); }
+  .stage-chk.boss.done { background: radial-gradient(ellipse, #6a4a0a, #2a1a00); border-color: #f4c040; color: #ffdc80; }
+  .stage-chk.boss.cur { background: radial-gradient(ellipse, #a02020, #4a0a0a); border-color: #ff6060; color: #fff; box-shadow: 0 0 14px rgba(255,80,80,0.9); }
+  .stage-link { flex: 1; height: 3px; background: #4a2818; min-width: 6px; position: relative; overflow: hidden; border-radius: 2px; }
+  .stage-link .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: linear-gradient(90deg, #6abe30, #f4d03f); transition: width 0.35s ease-out; box-shadow: 0 0 6px rgba(244,208,63,0.5); }
+  .enemy-card { flex: 0 0 60%; min-width: 0; display: flex; gap: 8px; align-items: center; padding: 5px 8px; border: 2px solid #8b0000; background: radial-gradient(ellipse at center, #2a0a0a, #0a0303); box-shadow: 0 0 14px rgba(139,0,0,0.4); cursor: pointer; transition: margin 0.35s ease, flex-basis 0.35s ease, opacity 0.35s ease, border-color 0.15s, box-shadow 0.15s, filter 0.35s; position: relative; box-sizing: border-box; }
+  .enemy-card:hover { border-color: #ff6b6b; box-shadow: 0 0 20px rgba(255,80,80,0.6); }
+  .enemy-card.target { border-color: #f4d03f; box-shadow: 0 0 22px rgba(244,208,63,0.7); animation: targetPulse 1.4s infinite; }
+  .enemy-card.dead { flex-basis: 0 !important; margin: 0 !important; padding: 0; border-width: 0; opacity: 0; pointer-events: none; overflow: hidden; filter: grayscale(1); }
+  .enemy-card.dead::after { content: ''; position: absolute; inset: 0; background: url('assets/icons/death-skull.svg') center/36px 36px no-repeat; filter: drop-shadow(0 0 6px #000); }
+  @keyframes targetPulse { 50% { box-shadow: 0 0 28px rgba(244,208,63,1); } }
+  .enemy-card .portrait { font-size: 36px; line-height: 1; filter: drop-shadow(0 0 6px rgba(255,80,80,0.6)); flex-shrink: 0; }
+  .enemy-card .info { flex: 1; min-width: 0; }
+  .enemy-card .name { font-family: 'MedievalSharp', cursive; font-size: 13px; color: #ff6b6b; text-shadow: 1px 1px 0 #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .enemy-card .lvl { font-size: 10px; color: #8b6f47; }
+  .enemy-card .bar { height: 12px; }
+  .enemy-card .bar .label { font-size: 10px; line-height: 12px; }
+
+  .tabs { display: flex; border-bottom: 2px solid #6b4423; margin-bottom: 8px; }
+  .tab { flex: 1; text-align: center; padding: 6px; cursor: pointer; background: linear-gradient(180deg, #2a1810, #1a0e08); color: #8b6f47; border: 1px solid #4a2818; font-family: 'MedievalSharp', cursive; font-size: 12px; position: relative; }
+  .tab.active { background: linear-gradient(180deg, #6b4423, #4a2818); color: #f4d03f; text-shadow: 1px 1px 0 #000; }
+  .tab .badge { position: absolute; top: -2px; right: 4px; background: #d12626; color: #fff; border-radius: 8px; padding: 0 4px; font-size: 9px; font-family: 'PT Serif', serif; min-width: 14px; }
+
+  .item { display: flex; justify-content: space-between; padding: 4px 6px; border-bottom: 1px dotted #4a2818; font-size: 12px; align-items: center; }
+  .item .ico { width: 20px; text-align: center; }
+  .item .nm { flex: 1; padding: 0 6px; }
+  .item .qty { color: #f4d03f; }
+  .item button { font-size: 10px; padding: 2px 6px; margin-left: 4px; }
+
+  .equip-slot { display: flex; align-items: center; gap: 6px; padding: 4px; border: 1px solid #4a2818; margin-bottom: 4px; background: rgba(0,0,0,0.3); }
+  .equip-slot .ico { font-size: 22px; width: 26px; text-align: center; }
+  .equip-slot .info { flex: 1; min-width: 0; font-size: 11px; }
+  .equip-slot .info .nm { color: #f4d03f; }
+  .equip-slot .info .ds { color: #8b6f47; font-size: 10px; }
+  .equip-slot .empty { color: #4a2818; font-style: italic; }
+  .equip-grid { display: grid; grid-template-columns: 1fr 1.4fr 1fr; grid-template-rows: repeat(5, 44px); gap: 4px; }
+  .esl { position: relative; border: 2px solid #6b4423; background: radial-gradient(ellipse, #2a1810, #0a0503); display:flex; align-items:center; justify-content:center; cursor:pointer; transition: border-color 0.15s, box-shadow 0.15s; min-width: 0; }
+  .esl:hover { border-color: #f4d03f; box-shadow: 0 0 8px rgba(244,208,63,0.5); }
+  .esl.empty .slot-ph { opacity: 0.35; filter: brightness(0) saturate(100%) invert(27%) sepia(15%) saturate(1200%) hue-rotate(350deg) brightness(95%) contrast(85%); }
+  .esl .ench { position: absolute; top: -3px; right: 2px; font-size: 10px; color: #f4d03f; text-shadow: 1px 1px 0 #000, 0 0 3px #000; font-weight: bold; line-height:1; }
+  .esl .gi { width: 26px; height: 26px; }
+  .esl-hero { grid-column: 2; grid-row: 1 / span 3; flex-direction: column; padding: 4px 2px; gap: 2px; }
+  .esl-hero .gi { width: 64px; height: 64px; filter: brightness(0) saturate(100%) invert(86%) sepia(22%) saturate(1160%) hue-rotate(3deg) brightness(101%) contrast(93%) drop-shadow(0 0 6px rgba(244,208,63,0.5)); }
+  .hero-meta-inline { font-family: 'Georgia', serif; font-size: 11px; color: #d4b87a; font-weight: normal; letter-spacing: 0; text-shadow: 1px 1px 0 #000; margin-left: 8px; opacity: 0.9; }
+  .slot-item { padding: 8px; border: 1px solid #6b4423; cursor: pointer; transition: all 0.15s; display:flex; gap:10px; align-items:center; margin-bottom: 4px; background: rgba(0,0,0,0.25); }
+  .slot-item:hover { border-color: #f4d03f; background: rgba(244,208,63,0.08); }
+  .slot-item .gi { width: 28px; height: 28px; }
+
+  .quest-card { border: 1px solid #6b4423; background: rgba(0,0,0,0.4); padding: 6px 8px; margin-bottom: 6px; font-size: 12px; }
+  .quest-card .title { font-family: 'MedievalSharp', cursive; color: #f4d03f; font-size: 13px; text-shadow: 1px 1px 0 #000; }
+  .quest-card .desc { color: #8b6f47; font-style: italic; margin: 3px 0; font-size: 11px; }
+  .quest-card .progress { color: #5fb3d4; font-size: 11px; }
+  .quest-card .reward { color: #6abe30; font-size: 11px; }
+  .quest-card.done { border-color: #6abe30; box-shadow: 0 0 6px rgba(106,190,48,0.3); }
+  .quest-card.completed { opacity: 0.5; }
+  .quest-card.completed .title { color: #6abe30; }
+
+  ::-webkit-scrollbar { width: 10px; }
+  ::-webkit-scrollbar-track { background: #1a0e08; }
+  ::-webkit-scrollbar-thumb { background: #6b4423; border: 1px solid #4a2818; }
+
+  footer { text-align: center; padding: 6px; border-top: 2px solid #6b4423; font-size: 10px; color: #6b4423; font-style: italic; flex-shrink: 0; }
+  footer a { color: #8b6f47; }
+
+  /* scrollbar под интерфейс */
+  * { scrollbar-width: thin; scrollbar-color: #6b4423 #1a0e08; }
+  ::-webkit-scrollbar { width: 12px; height: 12px; }
+  ::-webkit-scrollbar-track { background: #1a0e08; border-left: 1px solid #4a2818; }
+  ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #6b4423, #4a2818); border: 1px solid #2a1810; }
+  ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #8b6f47, #6b4423); }
+  ::-webkit-scrollbar-corner { background: #1a0e08; }
+
+  /* числовой инпут без нативных стрелок */
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+  input:focus, button:focus, select:focus { outline: none; border-color: #f4d03f; box-shadow: 0 0 6px rgba(244,208,63,0.5); }
+
+  /* счётчик с кастомными стрелками и кнопкой "Макс" на ховере */
+  .qty-wrap { position: relative; display: inline-flex; align-items: stretch; vertical-align: middle; }
+  .qty-wrap input { border-right: none !important; text-align: center; }
+  .qty-wrap .qty-arrows { display: flex; flex-direction: column; border: 1px solid #6b4423; border-left: none; background: linear-gradient(180deg, #2a1810, #1a0e08); }
+  .qty-wrap .qty-arrows button {
+    font-family: inherit; font-size: 8px; line-height: 1; padding: 0 4px; min-height: 10px; flex: 1;
+    background: linear-gradient(180deg, #4a2818, #2a1810); color: #f4d03f;
+    border: none; border-bottom: 1px solid #6b4423; cursor: pointer;
+  }
+  .qty-wrap .qty-arrows button:last-child { border-bottom: none; }
+  .qty-wrap .qty-arrows button:hover { background: linear-gradient(180deg, #6b4423, #4a2818); }
+  .qty-wrap .qty-arrows button:focus { box-shadow: none; }
+  .qty-wrap .max-btn {
+    display: none; position: absolute; left: 50%; top: 100%; transform: translateX(-50%);
+    margin-top: 3px; white-space: nowrap; font-family: inherit; font-size: 10px;
+    background: linear-gradient(180deg, #4a2818, #2a1810); color: #f4d03f;
+    border: 1px solid #6b4423; padding: 2px 6px; cursor: pointer; z-index: 5;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.6);
+  }
+  .qty-wrap:hover .max-btn, .qty-wrap:focus-within .max-btn { display: inline-block; }
+  .qty-wrap .max-btn:hover { background: linear-gradient(180deg, #6b4423, #4a2818); border-color: #f4d03f; }
+
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; z-index: 100; }
+  .modal-bg.show { display: flex; }
+  .modal { background: linear-gradient(180deg, #2a1810, #1a0e08); border: 3px double #f4d03f; padding: 20px; max-width: 700px; width: 90%; box-shadow: 0 0 40px rgba(244,208,63,0.4); max-height: 90vh; overflow-y: auto; }
+  .modal h2 { font-family: 'MedievalSharp', cursive; color: #f4d03f; margin-bottom: 12px; font-size: 24px; text-align: center; }
+  .modal p { margin-bottom: 14px; line-height: 1.6; text-align: center; }
+  .modal input { background: #0a0503; border: 2px inset #6b4423; color: #f4d03f; padding: 8px; font-family: inherit; font-size: 14px; width: 200px; text-align: center; }
+  .modal .classes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 12px 0; }
+  .modal .cls { padding: 12px; border: 2px solid #6b4423; cursor: pointer; background: rgba(0,0,0,0.3); }
+  .modal .cls:hover { border-color: #f4d03f; background: rgba(107,68,35,0.4); }
+  .modal .cls .ico { font-size: 36px; text-align: center; }
+  .modal .cls .nm { font-family: 'MedievalSharp', cursive; color: #f4d03f; margin: 4px 0; text-align: center; }
+  .modal .cls .desc { font-size: 11px; color: #8b6f47; text-align: center; }
+
+  .shop-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 10px; padding: 0 6px; }
+  .shop-header .gold { color: #f4d03f; font-family: 'MedievalSharp', cursive; font-size: 16px; }
+  .shop-header .close { background: linear-gradient(180deg, #8b0000, #4a0000); color: #fff; border: 2px outset #d12626; padding: 4px 12px; cursor: pointer; font-family: 'MedievalSharp', cursive; }
+  .shop-tabs { display: flex; border-bottom: 2px solid #6b4423; margin-bottom: 10px; }
+  .shop-tab { flex: 1; text-align: center; padding: 6px; cursor: pointer; background: linear-gradient(180deg, #2a1810, #1a0e08); color: #8b6f47; border: 1px solid #4a2818; font-family: 'MedievalSharp', cursive; font-size: 12px; }
+  .shop-tab.active { background: linear-gradient(180deg, #6b4423, #4a2818); color: #f4d03f; }
+  .shop-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .shop-card { border: 2px ridge #6b4423; background: linear-gradient(180deg, rgba(40,20,10,0.7), rgba(20,10,5,0.7)); padding: 8px; display: flex; flex-direction: column; align-items: center; text-align: center; font-size: 12px; }
+  .shop-card .ico { font-size: 32px; line-height: 1; margin: 4px 0; filter: drop-shadow(0 0 4px rgba(244,208,63,0.4)); }
+  .shop-card .nm { font-family: 'MedievalSharp', cursive; color: #f4d03f; font-size: 13px; }
+  .shop-card .ds { color: #8b6f47; font-size: 11px; min-height: 30px; margin: 4px 0; }
+  .shop-card .price { color: #f4d03f; font-weight: bold; margin: 4px 0; }
+  .shop-card .price.no { color: #d12626; }
+  .shop-card button { font-family: 'MedievalSharp', cursive; padding: 4px 10px; background: linear-gradient(180deg, #6b4423, #3a2010); color: #f4d03f; border: 2px outset #8b6f47; cursor: pointer; font-size: 12px; margin-top: 4px; }
+  .shop-card button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .shop-card button:hover:not(:disabled) { background: linear-gradient(180deg, #8b5a2b, #4a2818); }
+  .shop-card .equipped { color: #6abe30; font-size: 10px; font-style: italic; }
+
+  .gi { display: inline-block; width: 1em; height: 1em; vertical-align: -0.15em;
+        filter: brightness(0) saturate(100%) invert(86%) sepia(22%) saturate(1160%) hue-rotate(3deg) brightness(101%) contrast(93%);
+        object-fit: contain; }
+  .scene-box .gi { width: 42px; height: 42px; vertical-align: middle; filter: brightness(0) saturate(100%) invert(86%) sepia(22%) saturate(1160%) hue-rotate(3deg) brightness(101%) contrast(93%) drop-shadow(0 0 6px rgba(244,208,63,0.5)); }
+  .equip-slot .gi { width: 22px; height: 22px; }
+  .modal .cls .gi { width: 36px; height: 36px; }
+  .shop-card .gi { width: 32px; height: 32px; filter: brightness(0) saturate(100%) invert(86%) sepia(22%) saturate(1160%) hue-rotate(3deg) brightness(101%) contrast(93%) drop-shadow(0 0 4px rgba(244,208,63,0.4)); }
+  .portrait .gi { width: 2.2em; height: 2.2em; }
+  .stage-bar .gi { width: 14px; height: 14px; }
+  .gi.good { filter: brightness(0) saturate(100%) invert(72%) sepia(40%) saturate(610%) hue-rotate(55deg) brightness(95%) contrast(88%); }
+  .gi.bad  { filter: brightness(0) saturate(100%) invert(45%) sepia(82%) saturate(3000%) hue-rotate(340deg) brightness(90%) contrast(95%); }
+  .gi.magic{ filter: brightness(0) saturate(100%) invert(68%) sepia(30%) saturate(800%) hue-rotate(165deg) brightness(95%) contrast(90%); }
+</style>
+</head>
+<body>
+<div class="frame">
+  <header>
+    <h1><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Сумрачные Земли <img class="gi" src="assets/icons/crossed-swords.svg" alt=""></h1>
+    <div class="sub">— текстовая ролевая игра в духе старого интернета —</div>
+  </header>
+
+  <div class="layout">
+    <div class="col left">
+      <div class="panel">
+        <h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Герой <span class="hero-meta-inline" id="hero-meta"></span></h3>
+        <div class="body">
+          <div id="equip-body"></div>
+          <div class="bar hp"><div class="ghost" id="hp-ghost"></div><div class="fill" id="hp-fill"></div><div class="label" id="hp-lbl">100/100</div></div>
+          <div class="bar mp"><div class="ghost" id="mp-ghost"></div><div class="fill" id="mp-fill"></div><div class="label" id="mp-lbl">50/50</div></div>
+          <div class="bar xp"><div class="fill" id="xp-fill"></div><div class="label" id="xp-lbl">0/100</div></div>
+        </div>
+      </div>
+      <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Характеристики</h3><div class="body" id="stats-body"></div></div>
+    </div>
+
+    <div class="col center">
+      <div class="center-top">
+        <div class="scene-strip">
+          <div class="scene-box">
+            <div class="ico" id="scene-art"><img class="gi" src="assets/icons/castle.svg" alt=""></div>
+            <div class="txt"><div class="nm" id="scene-name">—</div><div class="ds" id="scene-desc">—</div></div>
+          </div>
+          <div class="enemies-area" id="combat-area" style="display:none"></div>
+        </div>
+        <div class="stage-bar" id="stage-bar"></div>
+      </div>
+      <div class="panel log-panel">
+        <h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Журнал событий</h3>
+        <div class="body"><div class="log" id="log"></div></div>
+      </div>
+      <div class="actions" id="actions"></div>
+    </div>
+
+    <div class="col right">
+      <div class="tabs">
+        <div class="tab active" data-tab="inv">Сумка</div>
+        <div class="tab" data-tab="map">Карта</div>
+        <div class="tab" data-tab="quest">Свиток <span class="badge" id="quest-badge" style="display:none">0</span></div>
+      </div>
+      <div id="tab-inv">
+        <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Зелья и припасы</h3><div class="body" id="inv-body"></div></div>
+        <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Магия</h3><div class="body" id="spells-body"></div></div>
+        <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Реликвии</h3><div class="body" id="quest-items-body"></div></div>
+      </div>
+      <div id="tab-map" style="display:none">
+        <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Сумрачные Земли</h3><div class="body" id="map-body"></div></div>
+      </div>
+      <div id="tab-quest" style="display:none">
+        <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Доступные задания</h3><div class="body" id="avail-body"></div></div>
+        <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Активные задания</h3><div class="body" id="active-body"></div></div>
+        <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Завершённые</h3><div class="body" id="done-body" style="font-size:11px"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    © 200X • Сумрачные Земли • all rights reserved • лучше всего просматривать в Internet Explorer 6
+    &nbsp;•&nbsp; <a href="#" onclick="newGame();return false;">[начать заново]</a>
+    &nbsp;•&nbsp; <span id="save-indicator" style="color:#4a2818">○ сохранено</span>
+    &nbsp;•&nbsp; иконки: <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a> (<a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>)
+  </footer>
+</div>
+
+<div class="modal-bg show" id="start-modal">
+  <div class="modal">
+    <h2><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Добро пожаловать, странник <img class="gi" src="assets/icons/crossed-swords.svg" alt=""></h2>
+    <p>Сумрачные Земли ждут нового героя. Назови себя и выбери свой путь.</p>
+    <p style="text-align:center"><input type="text" id="name-input" placeholder="Имя героя" maxlength="16" value="Безымянный"></p>
+    <div class="classes">
+      <div class="cls" data-cls="warrior"><div class="ico"><img class="gi" src="assets/icons/barbarian.svg" alt=""></div><div class="nm">Воин</div><div class="desc">Сила и стойкость. Тяжёлый меч.</div></div>
+      <div class="cls" data-cls="mage"><div class="ico"><img class="gi" src="assets/icons/wizard-face.svg" alt=""></div><div class="nm">Маг</div><div class="desc">Огненные шары и лёд.</div></div>
+      <div class="cls" data-cls="rogue"><div class="ico"><img class="gi" src="assets/icons/ninja-head.svg" alt=""></div><div class="nm">Плут</div><div class="desc">Ловкость и яд из тени.</div></div>
+    </div>
+    <p style="font-size:11px;color:#8b6f47">Кликни на класс, чтобы начать приключение.</p>
+  </div>
+</div>
+
+<div class="modal-bg" id="slot-modal" onclick="if(event.target===this)closeSlotModal()">
+  <div class="modal" style="max-width:500px" id="slot-modal-inner"></div>
+</div>
+
+<div class="modal-bg" id="trade-modal" onclick="if(event.target===this)closeTrader()">
+  <div class="modal" style="max-width:820px" id="trade-modal-inner"></div>
+</div>
+
+<div class="modal-bg" id="shop-modal" onclick="if(event.target===this)closeShop()">
+  <div class="modal" style="max-width:780px">
+    <div class="shop-header">
+      <h2 style="margin:0;text-align:left;font-size:20px" id="shop-name"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Лавка</h2>
+      <span class="gold"><img class="gi" src="assets/icons/two-coins.svg" alt=""> <span id="shop-gold">0</span></span>
+      <button class="close" onclick="closeShop()"><img class="gi" src="assets/icons/cancel.svg" alt=""> Уйти</button>
+    </div>
+    <div class="shop-tabs" id="shop-tabs"></div>
+    <div class="shop-grid" id="shop-grid"></div>
+  </div>
+</div>
+
+<script>
+// ==================== ПРЕДМЕТЫ ====================
+const ITEMS = {
+  // Оружие
+  w_starter_sword:   { type:'weapon', slot:'weapon', ico:'<img class="gi" src="assets/icons/crossed-swords.svg" alt="">', name:'Стальной меч',     wdmg:[6,10], desc:'Стартовое оружие воина' },
+  w_starter_staff:   { type:'weapon', slot:'weapon', ico:'<img class="gi" src="assets/icons/magic-palm.svg" alt="">', name:'Дубовый посох',    wdmg:[3,6],  desc:'Стартовое оружие мага' },
+  w_starter_daggers: { type:'weapon', slot:'weapon', ico:'<img class="gi" src="assets/icons/plain-dagger.svg" alt="">', name:'Парные кинжалы',   wdmg:[4,9],  desc:'Стартовое оружие плута' },
+  w_axe:             { type:'weapon', slot:'weapon', ico:'<img class="gi" src="assets/icons/battle-axe.svg" alt="">', name:'Боевой топор',     wdmg:[9,15], price:200, desc:'Грубо, но эффективно' },
+  w_warhammer:       { type:'weapon', slot:'weapon', ico:'<img class="gi" src="assets/icons/flat-hammer.svg" alt="">', name:'Боевой молот',     wdmg:[13,21],price:480, desc:'Дробит кости и латы' },
+  w_greatsword:      { type:'weapon', slot:'weapon', ico:'<img class="gi" src="assets/icons/crossed-swords.svg" alt="">', name:'Двуручный меч',    wdmg:[17,27],price:950, desc:'Огромный клинок' },
+  w_runic:           { type:'weapon', slot:'weapon', ico:'<img class="gi" src="assets/icons/sparkles.svg" alt="">', name:'Рунный клинок',    wdmg:[23,35],price:1900,desc:'Покрыт древними рунами' },
+  w_dragonfang:      { type:'weapon', slot:'weapon', ico:'<img class="gi" src="assets/icons/dragon-head.svg" alt="">', name:'Драконий клык',    wdmg:[30,46],price:4500,desc:'Создан из клыка дракона' },
+  // Оружие воина
+  ww_gladius:        { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/relic-blade.svg" alt="">', name:'Короткий клинок', wdmg:[5,9],   price:90,   desc:'Быстрый и лёгкий' },
+  ww_broadsword:     { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/broadsword.svg" alt="">', name:'Широкий меч',     wdmg:[10,16], price:260,  desc:'Надёжная сталь' },
+  ww_cleaver:        { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/cleaver.svg" alt="">', name:'Тесак мясника',   wdmg:[11,20], price:340,  desc:'Грубо, но безжалостно' },
+  ww_halberd:        { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/halberd.svg" alt="">', name:'Алебарда',        wdmg:[14,22], price:520,  desc:'Длинное древко, тяжёлый наконечник' },
+  ww_stone_axe:      { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/stone-axe.svg" alt="">', name:'Каменный топор',  wdmg:[15,23], bonuses:{str:2}, price:640,  desc:'+2 STR, варварская мощь' },
+  ww_war_pick:       { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/war-pick.svg" alt="">', name:'Боевая кирка',    wdmg:[16,24], price:720,  desc:'Пробивает латы' },
+  ww_spiked_mace:    { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/spiked-mace.svg" alt="">', name:'Шипастая булава', wdmg:[18,28], bonuses:{str:3}, price:1000, desc:'+3 STR, дробит всё' },
+  ww_katana:         { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/katana.svg" alt="">', name:'Катана',          wdmg:[21,32], bonuses:{agi:2,crit:5}, price:1450, desc:'+2 AGI, +5% крит' },
+  ww_winged_sword:   { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/winged-sword.svg" alt="">', name:'Крылатый меч',    wdmg:[26,38], bonuses:{str:4}, price:2200, desc:'+4 STR, благословлён' },
+  ww_bloody:         { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/bloody-sword.svg" alt="">', name:'Кровавый клинок', wdmg:[34,50], bonuses:{str:6,crit:10}, price:3900, desc:'+6 STR, +10% крит' },
+  // Оружие мага
+  wm_crystal_wand:   { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/crystal-wand.svg" alt="">', name:'Хрустальная палочка', wdmg:[4,8],   bonuses:{int:1}, price:100,  desc:'+1 INT' },
+  wm_fairy_wand:     { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/fairy-wand.svg" alt="">', name:'Волшебная палочка',   wdmg:[6,12],  bonuses:{int:2,mpMax:10}, price:240,  desc:'+2 INT, +10 MP' },
+  wm_scroll_staff:   { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/scroll-unfurled.svg" alt="">', name:'Посох свитков',    wdmg:[9,15],  bonuses:{int:3,mpMax:15}, price:440,  desc:'+3 INT, +15 MP' },
+  wm_gem_wand:       { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/gem-pendant.svg" alt="">', name:'Самоцветный жезл',   wdmg:[11,18], bonuses:{int:4}, price:720,  desc:'+4 INT' },
+  wm_frost_orb:      { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/frozen-orb.svg" alt="">', name:'Посох мороза',       wdmg:[14,22], bonuses:{int:5,mpMax:20}, price:1050, desc:'+5 INT, +20 MP' },
+  wm_swirl_wand:     { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/magic-swirl.svg" alt="">', name:'Жезл вихря чар',     wdmg:[17,26], bonuses:{int:6}, price:1450, desc:'+6 INT' },
+  wm_thunder:        { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/lightning-bolt.svg" alt="">', name:'Громовой жезл',    wdmg:[20,30], bonuses:{int:7,mpMax:25}, price:1950, desc:'+7 INT, +25 MP' },
+  wm_trident:        { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/magic-trident.svg" alt="">', name:'Магический трезубец', wdmg:[23,34], bonuses:{int:8}, price:2550, desc:'+8 INT' },
+  wm_tome:           { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/spell-book.svg" alt="">', name:'Гримуар заклинаний', wdmg:[26,38], bonuses:{int:9,mpMax:35}, price:3300, desc:'+9 INT, +35 MP' },
+  wm_sun_orb:        { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/gooey-eyed-sun.svg" alt="">', name:'Солнечный око-жезл', wdmg:[32,46], bonuses:{int:12,mpMax:50}, price:4900, desc:'+12 INT, +50 MP' },
+  // Оружие плута
+  wr_curvy_knife:    { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/curvy-knife.svg" alt="">', name:'Изогнутый нож',    wdmg:[5,10],  bonuses:{crit:3}, price:100,  desc:'+3% крит' },
+  wr_stiletto:       { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/stiletto.svg" alt="">', name:'Стилет',           wdmg:[7,13],  bonuses:{crit:6}, price:250,  desc:'+6% крит' },
+  wr_sai:            { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/sai.svg" alt="">', name:'Пара саи',          wdmg:[10,16], bonuses:{agi:2}, price:450,  desc:'+2 AGI' },
+  wr_butterfly:      { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/butterfly-knife.svg" alt="">', name:'Нож-бабочка',     wdmg:[12,19], bonuses:{crit:9}, price:720,  desc:'+9% крит' },
+  wr_feather:        { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/feather.svg" alt="">', name:'Перо гарпии',       wdmg:[14,22], bonuses:{agi:3,crit:5}, price:1000, desc:'+3 AGI, +5% крит' },
+  wr_thrown:         { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/thrown-daggers.svg" alt="">', name:'Метательные клинки', wdmg:[16,26], bonuses:{crit:12}, price:1350, desc:'+12% крит' },
+  wr_poison:         { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/poison-bottle.svg" alt="">', name:'Отравленный клинок', wdmg:[18,29], bonuses:{agi:4}, price:1750, desc:'+4 AGI, смазан ядом' },
+  wr_arrow:          { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/arrow-flights.svg" alt="">', name:'Метательные стрелы', wdmg:[22,33], bonuses:{crit:14}, price:2300, desc:'+14% крит' },
+  wr_bow:            { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/bow-arrow.svg" alt="">', name:'Охотничий лук',     wdmg:[25,38], bonuses:{agi:5,crit:8}, price:2900, desc:'+5 AGI, +8% крит' },
+  wr_shadow:         { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/bowie-knife.svg" alt="">', name:'Теневой клинок',    wdmg:[32,48], bonuses:{agi:6,crit:15}, price:4600, desc:'+6 AGI, +15% крит' },
+  // Защита (offhand) — щиты
+  o_buckler:         { type:'armor', slot:'offhand', ico:'<img class="gi" src="assets/icons/round-shield.svg" alt="">', name:'Малый щит',        armor:2,  price:90,  desc:'Лёгкая защита для второй руки' },
+  o_shield:          { type:'armor', slot:'offhand', ico:'<img class="gi" src="assets/icons/round-shield.svg" alt="">', name:'Боевой щит',       armor:6,  price:320, desc:'Надёжная защита' },
+  o_tower:           { type:'armor', slot:'offhand', ico:'<img class="gi" src="assets/icons/round-shield.svg" alt="">', name:'Башенный щит',     armor:12, price:1300,desc:'Стена из стали' },
+  // Голова
+  h_hood:            { type:'armor', slot:'head', ico:'<img class="gi" src="assets/icons/hood.svg" alt="">', name:'Кожаный капюшон',  bonuses:{agi:2}, armor:1, price:60,  desc:'+2 к ловкости' },
+  h_helmet:          { type:'armor', slot:'head', ico:'<img class="gi" src="assets/icons/visored-helm.svg" alt="">', name:'Стальной шлем',    armor:4, price:220, desc:'Защита головы' },
+  h_crown:           { type:'armor', slot:'head', ico:'<img class="gi" src="assets/icons/crown.svg" alt="">', name:'Корона мудрости',  bonuses:{int:5,mpMax:25}, armor:2, price:900, desc:'+5 INT, +25 MP' },
+  // Плечи
+  s_pads:            { type:'armor', slot:'shoulders', ico:'<img class="gi" src="assets/icons/shoulder-armor.svg" alt="">', name:'Шипастые наплечники', bonuses:{str:2}, armor:1, price:80,  desc:'+2 к силе' },
+  s_pauldrons:       { type:'armor', slot:'shoulders', ico:'<img class="gi" src="assets/icons/shoulder-armor.svg" alt="">', name:'Латные наплечники',   armor:5, price:300, desc:'Тяжёлая защита плеч' },
+  s_dragon:          { type:'armor', slot:'shoulders', ico:'<img class="gi" src="assets/icons/dragon-spiral.svg" alt="">', name:'Драконьи наплечники', armor:9, bonuses:{str:3}, price:1300, desc:'+3 к силе, прочность дракона' },
+  // Тело
+  a_leather:         { type:'armor', slot:'body', ico:'<img class="gi" src="assets/icons/kimono.svg" alt="">', name:'Кожаный доспех',   armor:3,  price:80,  desc:'Лёгкая защита' },
+  a_chain:           { type:'armor', slot:'body', ico:'<img class="gi" src="assets/icons/mail-shirt.svg" alt="">', name:'Кольчуга',         armor:7,  price:240, desc:'Надёжная сталь' },
+  a_plate:           { type:'armor', slot:'body', ico:'<img class="gi" src="assets/icons/breastplate.svg" alt="">', name:'Латные доспехи',   armor:13, price:680, desc:'Тяжёлая броня' },
+  a_dragon:          { type:'armor', slot:'body', ico:'<img class="gi" src="assets/icons/dragon-spiral.svg" alt="">', name:'Драконьи латы',    armor:22, price:2200,desc:'Чешуя древнего змея' },
+  // Пояс
+  b_leather:         { type:'armor', slot:'belt', ico:'<img class="gi" src="assets/icons/knot.svg" alt="">', name:'Кожаный пояс',     bonuses:{hpMax:20}, price:70,  desc:'+20 HP' },
+  b_warrior:         { type:'armor', slot:'belt', ico:'<img class="gi" src="assets/icons/knot.svg" alt="">', name:'Боевой пояс',      bonuses:{str:3,hpMax:30}, price:320, desc:'+3 STR, +30 HP' },
+  b_might:           { type:'armor', slot:'belt', ico:'<img class="gi" src="assets/icons/knot.svg" alt="">', name:'Пояс могущества',  bonuses:{str:5,hpMax:60}, price:1200, desc:'+5 STR, +60 HP' },
+  // Кольца
+  ring_str:          { type:'accessory', slot:'ring', ico:'<img class="gi" src="assets/icons/diamond-ring.svg" alt="">', name:'Кольцо силы',      bonuses:{str:4},   price:160, desc:'+4 к силе' },
+  ring_agi:          { type:'accessory', slot:'ring', ico:'<img class="gi" src="assets/icons/diamond-ring.svg" alt="">', name:'Кольцо ловкости',  bonuses:{agi:4},   price:160, desc:'+4 к ловкости' },
+  ring_int:          { type:'accessory', slot:'ring', ico:'<img class="gi" src="assets/icons/diamond-ring.svg" alt="">', name:'Кольцо мудрости',  bonuses:{int:4},   price:160, desc:'+4 к интеллекту' },
+  // Амулеты
+  amulet_hp:         { type:'accessory', slot:'amulet', ico:'<img class="gi" src="assets/icons/prayer-beads.svg" alt="">', name:'Амулет жизни',     bonuses:{hpMax:50},price:380, desc:'+50 к макс. HP' },
+  amulet_mp:         { type:'accessory', slot:'amulet', ico:'<img class="gi" src="assets/icons/prayer-beads.svg" alt="">', name:'Амулет маны',      bonuses:{mpMax:50},price:380, desc:'+50 к макс. MP' },
+  amulet_crit:       { type:'accessory', slot:'amulet', ico:'<img class="gi" src="assets/icons/polar-star.svg" alt="">', name:'Амулет острого глаза', bonuses:{crit:15}, price:550, desc:'+15% шанс крита' },
+  amulet_phoenix:    { type:'accessory', slot:'amulet', ico:'<img class="gi" src="assets/icons/flame.svg" alt="">', name:'Амулет феникса',   bonuses:{regen:5},  price:1200, desc:'Регенерация 5 HP/ход' },
+  // Артефакты
+  art_orb:           { type:'accessory', slot:'artifact', ico:'<img class="gi" src="assets/icons/crystal-ball.svg" alt="">', name:'Сфера магии',      bonuses:{int:3,mpMax:30}, price:420, desc:'+3 INT, +30 MP' },
+  art_skull:         { type:'accessory', slot:'artifact', ico:'<img class="gi" src="assets/icons/skull-crossed-bones.svg" alt="">', name:'Череп воина',      bonuses:{str:3,hpMax:30}, price:420, desc:'+3 STR, +30 HP' },
+  art_compass:       { type:'accessory', slot:'artifact', ico:'<img class="gi" src="assets/icons/polar-star.svg" alt="">', name:'Компас удачи',     bonuses:{crit:10,agi:2}, price:680, desc:'+10% крит, +2 AGI' },
+  art_ankh:          { type:'accessory', slot:'artifact', ico:'<img class="gi" src="assets/icons/heart-plus.svg" alt="">', name:'Анкх жизни',       bonuses:{regen:3,hpMax:50}, price:1500, desc:'+3 регена, +50 HP' },
+  art_eye:           { type:'accessory', slot:'artifact', ico:'<img class="gi" src="assets/icons/dragon-head.svg" alt="">', name:'Око дракона',      bonuses:{int:5,str:5}, price:2400, desc:'+5 INT, +5 STR' },
+  // Расходники
+  potion_s:          { type:'consumable', ico:'<img class="gi" src="assets/icons/round-bottom-flask.svg" alt="">', name:'Малое зелье лечения',   price:15,  desc:'+30 HP', use:p=>{p.hp=Math.min(eff('hpMax'),p.hp+30); return 'Восстановлено 30 HP.';} },
+  potion_m:          { type:'consumable', ico:'<img class="gi" src="assets/icons/potion-ball.svg" alt="">', name:'Среднее зелье лечения', price:45,  desc:'+70 HP', use:p=>{p.hp=Math.min(eff('hpMax'),p.hp+70); return 'Восстановлено 70 HP.';} },
+  potion_l:          { type:'consumable', ico:'<img class="gi" src="assets/icons/glass-shot.svg" alt="">', name:'Большое зелье лечения', price:120, desc:'+150 HP',use:p=>{p.hp=Math.min(eff('hpMax'),p.hp+150); return 'Восстановлено 150 HP.';} },
+  mana_s:            { type:'consumable', ico:'<img class="gi" src="assets/icons/hearts.svg" alt="">', name:'Малое зелье маны',      price:20,  desc:'+30 MP', use:p=>{p.mp=Math.min(eff('mpMax'),p.mp+30); return 'Восстановлено 30 MP.';} },
+  mana_m:            { type:'consumable', ico:'<img class="gi" src="assets/icons/cut-diamond.svg" alt="">', name:'Среднее зелье маны',    price:55,  desc:'+70 MP', use:p=>{p.mp=Math.min(eff('mpMax'),p.mp+70); return 'Восстановлено 70 MP.';} },
+  elixir:            { type:'consumable', ico:'<img class="gi" src="assets/icons/dna1.svg" alt="">', name:'Эликсир жизни',         price:280, desc:'Полное HP/MP', use:p=>{p.hp=eff('hpMax');p.mp=eff('mpMax'); return 'Восстановлено всё.';} },
+  bomb:              { type:'consumable', ico:'<img class="gi" src="assets/icons/unlit-bomb.svg" alt="">', name:'Огненная бомба',        price:65,  desc:'35 урона ВСЕМ врагам', combat:true, aoe:true, dmg:35 },
+  // Квестовые
+  rat_tail:          { type:'quest', ico:'<img class="gi" src="assets/icons/rat.svg" alt="">', name:'Хвост гигантской крысы' },
+  heart:             { type:'quest', ico:'<img class="gi" src="assets/icons/heart-plus.svg" alt=""><img class="gi" src="assets/icons/flame.svg" alt="">', name:'Сердце утопленника' },
+  golem_core:        { type:'quest', ico:'<img class="gi" src="assets/icons/cut-diamond.svg" alt="">', name:'Ядро каменного стража' },
+  lich_skull:        { type:'quest', ico:'<img class="gi" src="assets/icons/skull-crossed-bones.svg" alt="">', name:'Череп Лича' },
+  ice_shard:         { type:'quest', ico:'<img class="gi" src="assets/icons/snowflake-1.svg" alt="">', name:'Осколок Ледяного Короля' },
+  phoenix_feather:   { type:'quest', ico:'<img class="gi" src="assets/icons/feather.svg" alt="">', name:'Перо феникса' },
+  // Торговые ресурсы
+  r_fur:   { type:'resource', ico:'<img class="gi" src="assets/icons/wolf-head.svg" alt="">', name:'Мех волка',       base:22,  desc:'Грубый мех. Ценится на севере.' },
+  r_herb:  { type:'resource', ico:'<img class="gi" src="assets/icons/pine-tree.svg" alt="">', name:'Пучок трав',       base:14,  desc:'Связка целебных трав.' },
+  r_ore:   { type:'resource', ico:'<img class="gi" src="assets/icons/mountains.svg" alt="">', name:'Железная руда',    base:38,  desc:'Грубая руда для кузниц.' },
+  r_silk:  { type:'resource', ico:'<img class="gi" src="assets/icons/kimono.svg" alt="">', name:'Рулон шёлка',       base:95,  desc:'Тонкая ткань из дальних земель.' },
+  r_gem:   { type:'resource', ico:'<img class="gi" src="assets/icons/cut-diamond.svg" alt="">', name:'Сырой самоцвет',  base:160, desc:'Неогранённый камень.' },
+  r_spice: { type:'resource', ico:'<img class="gi" src="assets/icons/flame.svg" alt="">', name:'Пряности',           base:55,  desc:'Жгучие специи.' }
+};
+
+const SPELLS = {
+  fireball:   { name:'Огненный шар',     ico:'<img class="gi" src="assets/icons/flame.svg" alt="">', cost:12, dmg:[14,22], desc:'Мощный удар огнём', cls:['mage'] },
+  iceshard:   { name:'Ледяной осколок',  ico:'<img class="gi" src="assets/icons/snowflake-1.svg" alt="">', cost:8,  dmg:[9,15],  desc:'Холодный удар', cls:['mage'] },
+  lightning:  { name:'Цепная молния',    ico:'<img class="gi" src="assets/icons/lightning-bolt.svg" alt="">', cost:18, dmg:[22,32], desc:'Полный урон цели + 60% по остальным', cls:['mage'], aoe:'chain', chain:0.6 },
+  frostnova:  { name:'Ледяная вспышка',  ico:'<img class="gi" src="assets/icons/frozen-orb.svg" alt="">', cost:22, dmg:[16,24], desc:'70% урона по всем врагам', cls:['mage'], aoe:'all', mult:0.7 },
+  heal:       { name:'Исцеление',        ico:'<img class="gi" src="assets/icons/sparkles.svg" alt="">', cost:10, heal:[18,28], desc:'Восстановить здоровье', cls:['mage','warrior','rogue'] },
+  poison:     { name:'Отравленный клинок', ico:'<img class="gi" src="assets/icons/death-skull.svg" alt="">', cost:6, dmg:[10,16], desc:'Подлый удар ядом', cls:['rogue'] },
+  shadow:     { name:'Удар из тени',     ico:'<img class="gi" src="assets/icons/moon.svg" alt="">', cost:14, dmg:[18,28], desc:'Внезапный удар', cls:['rogue'] },
+  smokebomb:  { name:'Дымовая бомба',    ico:'<img class="gi" src="assets/icons/wind-slap.svg" alt="">', cost:16, dmg:[10,16], desc:'Слепит и бьёт всех (50%)', cls:['rogue'], aoe:'all', mult:0.5 },
+  rage:       { name:'Боевой клич',      ico:'<img class="gi" src="assets/icons/angry-eyes.svg" alt="">', cost:8,  dmg:[12,20], desc:'Яростная атака', cls:['warrior'] },
+  cleave:     { name:'Рассекающий удар', ico:'<img class="gi" src="assets/icons/crossed-swords.svg" alt="">', cost:14, dmg:[20,30], desc:'Цель + 50% по соседям', cls:['warrior'], aoe:'chain', chain:0.5 },
+  whirlwind:  { name:'Вихрь клинков',    ico:'<img class="gi" src="assets/icons/vortex.svg" alt="">', cost:22, dmg:[18,28], desc:'60% урона по всем', cls:['warrior'], aoe:'all', mult:0.6 }
+};
+
+const CLASSES = {
+  warrior: { ico:'<img class="gi" src="assets/icons/barbarian.svg" alt="">', name:'Воин', hp:140, mp:30,  str:8, agi:4, int:2, weapon:'w_starter_sword' },
+  mage:    { ico:'<img class="gi" src="assets/icons/wizard-face.svg" alt="">', name:'Маг',  hp:90,  mp:100, str:3, agi:4, int:9, weapon:'w_starter_staff' },
+  rogue:   { ico:'<img class="gi" src="assets/icons/ninja-head.svg" alt="">', name:'Плут', hp:110, mp:50,  str:5, agi:9, int:4, weapon:'w_starter_daggers' }
+};
+
+// ==================== ТОРГОВЦЫ РЕСУРСОВ ====================
+const TRADERS = {
+  village:   { name:'Торговец Гуго',       desc:'Хитрый лавочник с деревенской площади.' },
+  forest:    { name:'Лесник Ториг',        desc:'Промышляет шкурами и травами.' },
+  swamp:     { name:'Ведьма Мирра',        desc:'Скупает травы и странные реагенты.' },
+  cave:      { name:'Гном-старатель Бром', desc:'Живёт под землёй и знает толк в руде.' },
+  crypt:     { name:'Старьёвщик Сельд',    desc:'Торгует среди мёртвых — никто не мешает.' },
+  ruins:     { name:'Коллекционер Элгар',  desc:'Ищет древние самоцветы и редкости.' },
+  port:      { name:'Капитан Рен',         desc:'Привозит шёлк и пряности с дальних берегов.' },
+  mountains: { name:'Шерп Ивор',           desc:'Обменивает меха на огненные специи.' },
+  volcano:   { name:'Огневар Ксант',       desc:'Безумец, кующий у лавы. Платит не скупясь.' },
+  lair:      { name:'Торговец-призрак',    desc:'Шепчет цены из тьмы. Золото принимает.' }
+};
+const RESOURCE_IDS = ['r_fur','r_herb','r_ore','r_silk','r_gem','r_spice'];
+const EVENT_TEMPLATES = [
+  // shortage events (price up)
+  { kind:'up', mul:[1.6,2.2], text: (t,r) => `У ${t.name} пожар на складе — ${r.name.toLowerCase()} почти не осталось, цена взлетела.` },
+  { kind:'up', mul:[1.5,2.0], text: (t,r) => `${t.name} срочно скупает ${r.name.toLowerCase()}: готовится большой заказ.` },
+  { kind:'up', mul:[1.7,2.4], text: (t,r) => `Слух: в округе ${t.name} эпидемия — ${r.name.toLowerCase()} в цене.` },
+  { kind:'up', mul:[1.5,1.9], text: (t,r) => `Караван с ${r.name.toLowerCase()} не дошёл до ${t.name} — торговец поднял цену.` },
+  { kind:'up', mul:[1.4,1.8], text: (t,r) => `${t.name} объявил награду за ${r.name.toLowerCase()}: запасы иссякли.` },
+  // surplus events (price down)
+  { kind:'down', mul:[0.35,0.6], text: (t,r) => `К ${t.name} прибыл караван — ${r.name.toLowerCase()} в избытке, цены обвалились.` },
+  { kind:'down', mul:[0.4,0.65], text: (t,r) => `Охотники завалили склад ${t.name} — ${r.name.toLowerCase()} некуда девать.` },
+  { kind:'down', mul:[0.45,0.7], text: (t,r) => `У ${t.name} портится ${r.name.toLowerCase()} — сбывает задёшево.` },
+  { kind:'down', mul:[0.4,0.6], text: (t,r) => `${t.name} получил долг ${r.name.toLowerCase()}ом — ему бы скинуть лишнее.` }
+];
+const MARKET_PERIOD_MS = 60000;
+function rndF(a,b){ return a + Math.random()*(b-a); }
+function ensureStock() {
+  if (!P || !P.market) return;
+  if (!P.market.stock) P.market.stock = {};
+  for (const locId of Object.keys(LOCATIONS)) {
+    if (!P.market.stock[locId]) P.market.stock[locId] = {};
+    for (const rid of RESOURCE_IDS) {
+      if (typeof P.market.stock[locId][rid] !== 'number') P.market.stock[locId][rid] = 0;
+    }
+  }
+}
+function traderStock(locId, rid) {
+  ensureStock();
+  return (P.market.stock[locId] && P.market.stock[locId][rid]) || 0;
+}
+function regenMarket() {
+  if (!P) return;
+  if (!P.market) P.market = { prices:{}, seen:{}, nextAt:0, news:[], stock:{} };
+  ensureStock();
+  const prices = {}, news = [];
+  for (const locId of Object.keys(LOCATIONS)) {
+    prices[locId] = {};
+    for (const rid of RESOURCE_IDS) {
+      const base = ITEMS[rid].base;
+      prices[locId][rid] = Math.max(1, Math.round(base * rndF(0.85, 1.15)));
+    }
+  }
+  const locIds = Object.keys(LOCATIONS);
+  const eventCount = 2 + Math.floor(Math.random()*2);
+  const usedPairs = new Set();
+  for (let i=0;i<eventCount;i++) {
+    const tpl = EVENT_TEMPLATES[Math.floor(Math.random()*EVENT_TEMPLATES.length)];
+    let locId, rid, key;
+    for (let tries=0;tries<12;tries++) {
+      locId = locIds[Math.floor(Math.random()*locIds.length)];
+      rid = RESOURCE_IDS[Math.floor(Math.random()*RESOURCE_IDS.length)];
+      key = locId+':'+rid;
+      if (!usedPairs.has(key)) break;
+    }
+    if (usedPairs.has(key)) continue;
+    usedPairs.add(key);
+    const base = ITEMS[rid].base;
+    const mul = rndF(tpl.mul[0], tpl.mul[1]);
+    prices[locId][rid] = Math.max(1, Math.round(base * mul));
+    news.push({
+      loc:locId, res:rid, kind:tpl.kind,
+      text: tpl.text(TRADERS[locId], ITEMS[rid])
+    });
+  }
+  P.market.prices = prices;
+  P.market.news = news;
+  P.market.nextAt = Date.now() + MARKET_PERIOD_MS;
+}
+function ensureMarket() {
+  if (!P.market || !P.market.prices || Date.now() >= (P.market.nextAt||0)) regenMarket();
+  ensureStock();
+}
+function marketPrice(locId, rid) {
+  ensureMarket();
+  return (P.market.prices[locId] && P.market.prices[locId][rid]) || ITEMS[rid].base;
+}
+function noteSeen(locId) {
+  if (!P.market.seen) P.market.seen = {};
+  const now = Date.now();
+  P.market.seen[locId] = {};
+  for (const rid of RESOURCE_IDS) {
+    P.market.seen[locId][rid] = { price: marketPrice(locId, rid), at: now };
+  }
+}
+let traderTickInterval = null;
+function openTrader() {
+  ensureMarket();
+  noteSeen(P.location);
+  renderTrader();
+  $('trade-modal').classList.add('show');
+  if (traderTickInterval) clearInterval(traderTickInterval);
+  traderTickInterval = setInterval(() => {
+    if (!document.getElementById('trade-modal').classList.contains('show')) { clearInterval(traderTickInterval); traderTickInterval=null; return; }
+    if (Date.now() >= (P.market.nextAt||0)) { regenMarket(); noteSeen(P.location); renderTrader(); return; }
+    const el = document.getElementById('trader-timer');
+    if (el) el.textContent = formatTimer(P.market.nextAt - Date.now());
+  }, 500);
+}
+function closeTrader(){ $('trade-modal').classList.remove('show'); if (traderTickInterval){clearInterval(traderTickInterval);traderTickInterval=null;} }
+function formatTimer(ms) {
+  const s = Math.max(0, Math.ceil(ms/1000));
+  const m = Math.floor(s/60), r = s%60;
+  return `${m}:${String(r).padStart(2,'0')}`;
+}
+function renderTrader() {
+  const locId = P.location;
+  const tr = TRADERS[locId]; if (!tr) return;
+  const loc = LOCATIONS[locId];
+  const prices = P.market.prices[locId];
+  const rows = RESOURCE_IDS.map(rid => {
+    const it = ITEMS[rid];
+    const price = prices[rid];
+    const base = it.base;
+    const pct = Math.round(((price-base)/base)*100);
+    const pctColor = pct>15?'#6abe30':(pct<-15?'#cf4030':'#8b6f47');
+    const pctLbl = `<span style="color:${pctColor};font-size:11px">${pct>=0?'+':''}${pct}%</span>`;
+    const qty = P.inv[rid] || 0;
+    const stock = traderStock(locId, rid);
+    const canBuy = P.gold >= price && stock > 0;
+    const canSell = qty > 0;
+    const maxAff = Math.min(stock, Math.floor(P.gold / price));
+    const qtyCtrl = `<span class="qty-wrap">
+      <input type="number" id="trq-${rid}" min="1" value="1" style="width:44px;background:#1a0f08;border:1px solid #6b4423;color:#d4b87a;padding:2px 4px;font-family:inherit;font-size:12px">
+      <span class="qty-arrows">
+        <button type="button" onclick="qtyStep('trq-${rid}',1)">▲</button>
+        <button type="button" onclick="qtyStep('trq-${rid}',-1)">▼</button>
+      </span>
+    </span>`;
+    const stockLbl = stock > 0
+      ? `<span style="color:#6abe30">${stock}</span>`
+      : `<span style="color:#8b6f47;font-style:italic">пусто</span>`;
+    return `<tr>
+      <td style="padding:6px 4px">${it.ico} ${it.name}</td>
+      <td style="padding:6px 4px;text-align:center">${qty}</td>
+      <td style="padding:6px 4px;text-align:center">${stockLbl}</td>
+      <td style="padding:6px 4px;text-align:right"><b style="color:#f4d03f">${price}</b> <img class="gi" src="assets/icons/two-coins.svg" alt=""><br>${pctLbl}</td>
+      <td style="padding:6px 4px;text-align:center">${qtyCtrl}</td>
+      <td style="padding:6px 4px;text-align:right;white-space:nowrap">
+        <button class="act" style="padding:3px 8px;font-size:11px" onclick="tradeBuy('${rid}')" ${canBuy?'':'disabled'}>Купить</button>
+        <button class="act" style="padding:3px 6px;font-size:10px" onclick="tradeBuyMax('${rid}')" ${maxAff>=1?'':'disabled'} title="Купить на весь баланс золота (${Math.max(0,maxAff)} шт.)">макс</button>
+        <button class="act" style="padding:3px 8px;font-size:11px;margin-left:6px" onclick="tradeSell('${rid}')" ${canSell?'':'disabled'}>Продать</button>
+        <button class="act" style="padding:3px 6px;font-size:10px" onclick="tradeSellAll('${rid}')" ${canSell?'':'disabled'} title="Продать весь стак (${qty} шт.)">макс</button>
+      </td>
+    </tr>`;
+  }).join('');
+  const newsHtml = (P.market.news && P.market.news.length)
+    ? P.market.news.map(n => {
+        const ico = n.kind==='up' ? '<img class="gi" src="assets/icons/lightning-bolt.svg" alt="">' : '<img class="gi" src="assets/icons/feather.svg" alt="">';
+        const color = n.kind==='up' ? '#cf4030' : '#6abe30';
+        return `<div style="color:#d4b87a;font-size:11px;padding:3px 0;border-left:3px solid ${color};padding-left:8px;margin:2px 0">${ico} ${n.text}</div>`;
+      }).join('')
+    : '<div style="color:#8b6f47;font-style:italic;font-size:11px">— рынки спокойны —</div>';
+  const compareRows = Object.keys(LOCATIONS).filter(l => l!==locId).map(lid => {
+    const seen = P.market.seen && P.market.seen[lid];
+    const trName = TRADERS[lid].name;
+    const cells = RESOURCE_IDS.map(rid => {
+      if (!seen || !seen[rid]) return `<td style="padding:3px 4px;text-align:center;color:#5a3820">—</td>`;
+      const p = seen[rid].price;
+      const cur = prices[rid];
+      const diff = p - cur;
+      const color = diff>0 ? '#6abe30' : (diff<0 ? '#cf4030' : '#8b6f47');
+      const ageS = Math.round((Date.now() - seen[rid].at)/1000);
+      const ageLbl = ageS<60?`${ageS}с`:`${Math.floor(ageS/60)}м`;
+      return `<td style="padding:3px 4px;text-align:center;color:${color}" title="${ageLbl} назад">${p}</td>`;
+    }).join('');
+    return `<tr><td style="padding:3px 6px;color:#8b6f47;font-size:11px">${trName}</td>${cells}</tr>`;
+  }).join('');
+  const headerCells = RESOURCE_IDS.map(rid => `<th style="padding:3px 4px;text-align:center;font-weight:normal;color:#8b6f47" title="${ITEMS[rid].name}">${ITEMS[rid].ico}</th>`).join('');
+  $('trade-modal-inner').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px">
+      <div>
+        <h2 style="margin:0;font-size:18px;text-align:left">${loc.ico} ${tr.name}</h2>
+        <div style="color:#8b6f47;font-size:11px;font-style:italic">${loc.name} — ${tr.desc}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="color:#f4d03f;font-size:13px">Золото: <b>${P.gold}</b> <img class="gi" src="assets/icons/two-coins.svg" alt=""></div>
+        <div style="color:#5fb3d4;font-size:11px">до обновления цен: <b id="trader-timer">${formatTimer(P.market.nextAt - Date.now())}</b></div>
+      </div>
+    </div>
+    <div style="margin:8px 0;padding:6px;background:rgba(0,0,0,0.35);border:1px solid #4a2818">
+      <div style="color:#f4d03f;font-size:12px;margin-bottom:4px">Слухи с рынков:</div>
+      ${newsHtml}
+    </div>
+    <table style="width:100%;border-collapse:collapse;color:#d4b87a;font-size:12px;margin-top:4px">
+      <thead><tr style="border-bottom:1px solid #4a2818;color:#8b6f47;font-size:11px">
+        <th style="text-align:left;padding:4px">Ресурс</th>
+        <th style="text-align:center;padding:4px">У тебя</th>
+        <th style="text-align:center;padding:4px" title="Запас у торговца — пополняется только продажами игрока">У торговца</th>
+        <th style="text-align:right;padding:4px">Цена</th>
+        <th style="text-align:center;padding:4px">×</th>
+        <th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    ${compareRows ? `
+      <details style="margin-top:10px" ${P.market.compareOpen?'open':''}>
+        <summary style="cursor:pointer;color:#5fb3d4;font-size:12px" onclick="setTimeout(()=>{P.market.compareOpen=this.parentElement.open;},0)">Цены в памяти (по другим торговцам)</summary>
+        <table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:11px">
+          <thead><tr style="color:#8b6f47"><th style="text-align:left;padding:3px 6px">Торговец</th>${headerCells}</tr></thead>
+          <tbody>${compareRows}</tbody>
+        </table>
+        <div style="color:#5a3820;font-size:10px;margin-top:4px">Зелёным — дороже, чем здесь (выгодно продать там), красным — дешевле (выгодно купить там). Навести мышь — когда видел.</div>
+      </details>
+    ` : ''}
+    <div style="margin-top:14px;text-align:right"><button class="act" onclick="closeTrader()">Уйти</button></div>
+  `;
+}
+function tradeBuy(rid) {
+  const price = marketPrice(P.location, rid);
+  const stock = traderStock(P.location, rid);
+  if (stock <= 0) { log(`<span class="bad">У ${TRADERS[P.location].name} нет ${ITEMS[rid].name.toLowerCase()} на продажу.</span>`); return; }
+  const el = document.getElementById('trq-'+rid);
+  let n = Math.max(1, Math.floor(parseInt(el&&el.value)||1));
+  n = Math.min(n, stock);
+  const total = price * n;
+  if (P.gold < total) { log(`<span class="bad">Не хватает ${total - P.gold} золота.</span>`); return; }
+  P.gold -= total;
+  P.inv[rid] = (P.inv[rid]||0) + n;
+  P.market.stock[P.location][rid] -= n;
+  log(`<span class="good"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено у ${TRADERS[P.location].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${n} за ${total}.</span>`);
+  renderTrader(); render();
+}
+function qtyStep(id, delta) {
+  const el = document.getElementById(id); if (!el) return;
+  const min = parseInt(el.min)||1;
+  const v = Math.max(min, (parseInt(el.value)||min) + delta);
+  el.value = v;
+}
+function tradeBuyMax(rid) {
+  const price = marketPrice(P.location, rid);
+  const stock = traderStock(P.location, rid);
+  if (stock <= 0) { log(`<span class="bad">У ${TRADERS[P.location].name} нет ${ITEMS[rid].name.toLowerCase()} на продажу.</span>`); return; }
+  const n = Math.min(stock, Math.floor(P.gold / price));
+  if (n < 1) { log(`<span class="bad">Золота не хватает даже на одну штуку ${ITEMS[rid].name}.</span>`); return; }
+  const total = price * n;
+  P.gold -= total;
+  P.inv[rid] = (P.inv[rid]||0) + n;
+  P.market.stock[P.location][rid] -= n;
+  log(`<span class="good"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено у ${TRADERS[P.location].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${n} за ${total}.</span>`);
+  renderTrader(); render();
+}
+function tradeSellAll(rid) {
+  const have = P.inv[rid] || 0; if (!have) return;
+  const price = marketPrice(P.location, rid);
+  const total = price * have;
+  delete P.inv[rid];
+  P.gold += total;
+  ensureStock();
+  P.market.stock[P.location][rid] = (P.market.stock[P.location][rid]||0) + have;
+  log(`<span class="info"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Продано ${TRADERS[P.location].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${have} за ${total} (весь стак).</span>`);
+  renderTrader(); render();
+}
+function tradeSell(rid) {
+  const have = P.inv[rid] || 0; if (!have) return;
+  const price = marketPrice(P.location, rid);
+  const el = document.getElementById('trq-'+rid);
+  let n = Math.max(1, Math.floor(parseInt(el&&el.value)||1));
+  n = Math.min(n, have);
+  const total = price * n;
+  P.inv[rid] -= n; if (P.inv[rid]<=0) delete P.inv[rid];
+  P.gold += total;
+  ensureStock();
+  P.market.stock[P.location][rid] = (P.market.stock[P.location][rid]||0) + n;
+  log(`<span class="info"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Продано ${TRADERS[P.location].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${n} за ${total}.</span>`);
+  renderTrader(); render();
+}
+
+// ==================== ВРАГИ ====================
+const ENEMIES = [
+  { id:'rat',     name:'Гигантская крыса',     ico:'<img class="gi" src="assets/icons/rat.svg" alt="">', hp:25,  dmg:[2,5],   xp:8,   gold:[2,6],    lvl:1, loc:['village','forest'], drops:{rat_tail:0.6}, resources:{r_herb:[0,1]} },
+  { id:'gob',     name:'Гоблин-разведчик',     ico:'<img class="gi" src="assets/icons/ogre.svg" alt="">', hp:40,  dmg:[4,8],   xp:18,  gold:[5,12],   lvl:2, loc:['forest','cave'], resources:{r_ore:[0,1]} },
+  { id:'wolf',    name:'Тёмный волк',          ico:'<img class="gi" src="assets/icons/wolf-head.svg" alt="">', hp:55,  dmg:[6,11],  xp:28,  gold:[4,10],   lvl:3, loc:['forest'], resources:{r_fur:[1,2]} },
+  { id:'spider',  name:'Лесной паук',          ico:'<img class="gi" src="assets/icons/spider-face.svg" alt="">', hp:48,  dmg:[5,10],  xp:24,  gold:[3,9],    lvl:3, loc:['forest','swamp'], resources:{r_herb:[0,1],r_silk:[0,1]} },
+  { id:'snake',   name:'Болотная гадюка',      ico:'<img class="gi" src="assets/icons/snake.svg" alt="">', hp:50,  dmg:[7,12],  xp:30,  gold:[5,11],   lvl:3, loc:['swamp'], resources:{r_herb:[1,2]} },
+  { id:'kikimora',name:'Кикимора',             ico:'<img class="gi" src="assets/icons/fairy.svg" alt="">', hp:65,  dmg:[8,13],  xp:38,  gold:[8,15],   lvl:4, loc:['swamp'], resources:{r_herb:[1,2]} },
+  { id:'drowned', name:'Утопленник',           ico:'<img class="gi" src="assets/icons/shambling-zombie.svg" alt="">', hp:70,  dmg:[9,14],  xp:42,  gold:[6,14],   lvl:4, loc:['swamp'], drops:{heart:0.4}, resources:{r_herb:[0,1]} },
+  { id:'skel',    name:'Скелет-воин',          ico:'<img class="gi" src="assets/icons/skull-crossed-bones.svg" alt="">', hp:75,  dmg:[8,14],  xp:45,  gold:[10,20],  lvl:4, loc:['cave','crypt','ruins'], resources:{r_ore:[0,1]} },
+  { id:'bandit',  name:'Лесной разбойник',     ico:'<img class="gi" src="assets/icons/ninja-head.svg" alt="">', hp:85,  dmg:[10,16], xp:55,  gold:[15,30],  lvl:5, loc:['forest'], resources:{r_silk:[0,1]} },
+  { id:'smuggler',name:'Контрабандист',        ico:'<img class="gi" src="assets/icons/bandit.svg" alt="">', hp:95,  dmg:[11,17], xp:65,  gold:[18,32],  lvl:5, loc:['port','forest'], resources:{r_silk:[1,2],r_spice:[0,1]} },
+  { id:'sailor',  name:'Пьяный матрос',        ico:'<img class="gi" src="assets/icons/vomiting.svg" alt="">', hp:80,  dmg:[9,15],  xp:50,  gold:[20,35],  lvl:5, loc:['port'], resources:{r_spice:[0,1],r_silk:[0,1]} },
+  { id:'orc',     name:'Орк-берсерк',          ico:'<img class="gi" src="assets/icons/goblin-head.svg" alt="">', hp:110, dmg:[12,20], xp:80,  gold:[20,40],  lvl:6, loc:['cave','crypt','ruins'], resources:{r_ore:[1,2]} },
+  { id:'ghost',   name:'Призрак',              ico:'<img class="gi" src="assets/icons/ghost.svg" alt="">', hp:95,  dmg:[14,22], xp:90,  gold:[18,35],  lvl:7, loc:['crypt','ruins'], resources:{r_gem:[0,1]} },
+  { id:'mummy',   name:'Мумия',                ico:'<img class="gi" src="assets/icons/djinn.svg" alt="">', hp:120, dmg:[13,21], xp:95,  gold:[22,40],  lvl:7, loc:['crypt'], resources:{r_gem:[0,1],r_silk:[0,1]} },
+  { id:'guardian',name:'Древний страж',        ico:'<img class="gi" src="assets/icons/stone-tower.svg" alt="">', hp:130, dmg:[15,23], xp:105, gold:[28,48],  lvl:8, loc:['ruins'], resources:{r_gem:[1,2],r_ore:[0,1]} },
+  { id:'troll',   name:'Пещерный тролль',      ico:'<img class="gi" src="assets/icons/daemon-skull.svg" alt="">', hp:160, dmg:[16,26], xp:130, gold:[35,60],  lvl:8, loc:['cave'], resources:{r_ore:[1,3]} },
+  { id:'snowwolf',name:'Снежный волк',         ico:'<img class="gi" src="assets/icons/wolf-head.svg" alt="">', hp:140, dmg:[15,24], xp:120, gold:[30,55],  lvl:8, loc:['mountains'], resources:{r_fur:[1,2]} },
+  { id:'yeti',    name:'Йети',                 ico:'<img class="gi" src="assets/icons/gorilla.svg" alt="">', hp:200, dmg:[19,29], xp:160, gold:[40,75],  lvl:9, loc:['mountains'], resources:{r_fur:[2,3]} },
+  { id:'iceelem', name:'Ледяной элементаль',   ico:'<img class="gi" src="assets/icons/snowflake-1.svg" alt="">', hp:180, dmg:[18,30], xp:170, gold:[45,80],  lvl:10,loc:['mountains'], resources:{r_gem:[0,1],r_ore:[1,2]} },
+  { id:'imp',     name:'Огненный имп',         ico:'<img class="gi" src="assets/icons/imp-laugh.svg" alt="">', hp:170, dmg:[20,30], xp:175, gold:[40,72],  lvl:10,loc:['volcano'], resources:{r_spice:[1,2]} },
+  { id:'lava',    name:'Лавовый элементаль',   ico:'<img class="gi" src="assets/icons/flame.svg" alt="">', hp:230, dmg:[22,34], xp:210, gold:[55,90],  lvl:11,loc:['volcano'], resources:{r_spice:[1,2],r_gem:[0,1]} },
+  { id:'salamander',name:'Огненная саламандра',ico:'<img class="gi" src="assets/icons/lizardman.svg" alt="">', hp:200, dmg:[24,32], xp:200, gold:[50,85],  lvl:11,loc:['volcano'], resources:{r_spice:[1,3]} },
+  // Боссы
+  { id:'golem',   name:'Каменный страж',       ico:'<img class="gi" src="assets/icons/stone-tower.svg" alt="">', hp:280, dmg:[18,28], xp:280, gold:[100,150],lvl:9, loc:['ruins'],     boss:true, drops:{golem_core:1}, resources:{r_ore:[3,5],r_gem:[2,4]} },
+  { id:'lich',    name:'Лич Морхольд',         ico:'<img class="gi" src="assets/icons/death-skull.svg" alt="">', hp:380, dmg:[22,34], xp:420, gold:[150,250],lvl:10,loc:['crypt'],     boss:true, drops:{lich_skull:1}, resources:{r_gem:[3,5],r_silk:[2,3],r_herb:[2,3]} },
+  { id:'snowking',name:'Ледяной Король',       ico:'<img class="gi" src="assets/icons/yeti.svg" alt="">', hp:450, dmg:[24,38], xp:520, gold:[200,300],lvl:12,loc:['mountains'], boss:true, drops:{ice_shard:1}, resources:{r_fur:[4,6],r_gem:[2,3]} },
+  { id:'phoenix', name:'Древний Феникс',       ico:'<img class="gi" src="assets/icons/eagle-emblem.svg" alt="">', hp:500, dmg:[26,40], xp:600, gold:[250,350],lvl:13,loc:['volcano'],   boss:true, drops:{phoenix_feather:1}, resources:{r_spice:[4,6],r_gem:[2,4]} },
+  { id:'dragon',  name:'Древний Дракон',       ico:'<img class="gi" src="assets/icons/dragon-head.svg" alt="">', hp:700, dmg:[30,46], xp:1000,gold:[500,750],lvl:16,loc:['lair'],      boss:true, resources:{r_gem:[5,8],r_spice:[3,5],r_silk:[3,5],r_ore:[3,5]} }
+];
+
+// ==================== ЛОКАЦИИ ====================
+const LOCATIONS = {
+  village:   { name:'Деревня Тихий Дол',   ico:'<img class="gi" src="assets/icons/village.svg" alt="">', desc:'Уютные дома, дым из труб, торговцы и трактирщик.', actions:['hunt','shop','inn','travel'], shop:'village' },
+  forest:    { name:'Сумрачный Лес',       ico:'<img class="gi" src="assets/icons/pine-tree.svg" alt="">', desc:'Старые сосны шепчут на ветру. Тропа петляет среди корней.', actions:['hunt','rest','travel'] },
+  swamp:     { name:'Гнилые Топи',         ico:'<img class="gi" src="assets/icons/withered-tree.svg" alt="">', desc:'Густой туман, запах тлена и тёмная вода под ногами.', actions:['hunt','rest','travel'] },
+  cave:      { name:'Пещеры Ульдара',      ico:'<img class="gi" src="assets/icons/hole.svg" alt="">', desc:'Влажные стены, эхо капель и чьи-то рычания во тьме.', actions:['hunt','travel'] },
+  crypt:     { name:'Древняя Крипта',      ico:'<img class="gi" src="assets/icons/coffin.svg" alt="">', desc:'Холод пробирает до костей. Здесь покоятся мёртвые — или нет.', actions:['hunt','travel'] },
+  ruins:     { name:'Развалины Альдора',   ico:'<img class="gi" src="assets/icons/greek-temple.svg" alt="">', desc:'Обломки забытого города. Эхо древних шагов.', actions:['hunt','travel'] },
+  port:      { name:'Порт Бурехвост',      ico:'<img class="gi" src="assets/icons/anchor.svg" alt="">', desc:'Соль на ветру, крики чаек и звон монет в трактирах.', actions:['hunt','shop','inn','travel'], shop:'port' },
+  mountains: { name:'Ледяные Пики',        ico:'<img class="gi" src="assets/icons/mountains.svg" alt="">', desc:'Снежные вершины, ветер режет лицо. Тут водятся твари.', actions:['hunt','rest','travel'] },
+  volcano:   { name:'Огненный Хребет',     ico:'<img class="gi" src="assets/icons/volcano.svg" alt="">', desc:'Раскалённые камни, потоки лавы. Воздух дрожит от жара.', actions:['hunt','travel'] },
+  lair:      { name:'Логово Дракона',      ico:'<img class="gi" src="assets/icons/dragon-spiral.svg" alt="">', desc:'Логово древнего ужаса. Здесь твой последний бой.', actions:['hunt','travel'] }
+};
+
+// ==================== МАГАЗИНЫ ====================
+const SHOPS = {
+  village: {
+    name:'<img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Лавка торговца Гуго',
+    items:['potion_s','potion_m','mana_s','bomb','w_axe','ww_gladius','ww_broadsword','ww_cleaver','ww_halberd','ww_stone_axe','wm_crystal_wand','wm_fairy_wand','wm_scroll_staff','wm_gem_wand','wm_frost_orb','wr_curvy_knife','wr_stiletto','wr_sai','wr_butterfly','wr_feather','a_leather','a_chain','h_hood','h_helmet','s_pads','b_leather','b_warrior','o_buckler','o_shield','ring_str','ring_agi','ring_int','art_orb','art_skull']
+  },
+  port: {
+    name:'<img class="gi" src="assets/icons/anchor.svg" alt=""> Морская торговая лавка',
+    items:['potion_m','potion_l','mana_m','elixir','bomb','w_warhammer','w_greatsword','w_runic','w_dragonfang','ww_war_pick','ww_spiked_mace','ww_katana','ww_winged_sword','ww_bloody','wm_swirl_wand','wm_thunder','wm_trident','wm_tome','wm_sun_orb','wr_thrown','wr_poison','wr_arrow','wr_bow','wr_shadow','a_chain','a_plate','a_dragon','h_helmet','h_crown','s_pauldrons','s_dragon','b_warrior','b_might','o_shield','o_tower','ring_str','ring_agi','ring_int','amulet_hp','amulet_mp','amulet_crit','amulet_phoenix','art_orb','art_skull','art_compass','art_ankh','art_eye']
+  }
+};
+
+// ==================== КВЕСТЫ ====================
+const QUESTS = {
+  q_rats: {
+    title:'Крысиная напасть', giver:'village',
+    desc:'Трактирщик жалуется на крыс в подвале. Принеси 3 хвоста гигантских крыс.',
+    type:'collect', item:'rat_tail', need:3,
+    reward:{ gold:30, items:{potion_s:2} }, next:'q_forest'
+  },
+  q_forest: {
+    title:'Очистить лес', giver:'village',
+    desc:'Староста: «Сумрачный Лес кишит тварями. Убей пятерых.»',
+    type:'kill', filter:e=>e.loc.includes('forest'), need:5,
+    reward:{ gold:80, items:{potion_m:2}, unlock:['swamp'] }, next:'q_swamp'
+  },
+  q_swamp: {
+    title:'Болотный знахарь', giver:'village',
+    desc:'Знахарка просит 3 сердца утопленников из Гнилых Топей.',
+    type:'collect', item:'heart', need:3,
+    reward:{ gold:150, items:{mana_m:2}, unlock:['cave'] }, next:'q_skel'
+  },
+  q_skel: {
+    title:'Тревожный сон', giver:'village',
+    desc:'Из пещер слышно лязг костей. Убей 6 скелетов.',
+    type:'kill', filter:e=>e.id==='skel', need:6,
+    reward:{ gold:200, items:{potion_m:2}, unlock:['crypt','ruins'] }, next:'q_port'
+  },
+  q_port: {
+    title:'Дорога к морю', giver:'village',
+    desc:'Староста посылает тебя в Порт Бурехвост за подмогой.',
+    type:'visit', target:'port',
+    reward:{ gold:60 }, accept:{ unlock:['port'] }, next:'q_bandits'
+  },
+  q_bandits: {
+    title:'Контрабанда', giver:'port',
+    desc:'Капитан: «Перебей 4 контрабандистов в порту.»',
+    type:'kill', filter:e=>e.id==='smuggler', need:4,
+    reward:{ gold:280, items:{potion_m:3} }, next:'q_ruins'
+  },
+  q_ruins: {
+    title:'Сокровище Альдора', giver:'port',
+    desc:'В Развалинах Альдора пробудился Каменный страж. Уничтожь его.',
+    type:'kill', filter:e=>e.id==='golem', need:1,
+    reward:{ gold:450, items:{potion_l:2}, unlock:['mountains'] }, next:'q_lich'
+  },
+  q_lich: {
+    title:'Древнее зло', giver:'village',
+    desc:'Лич Морхольд пробудился в Древней Крипте. Уничтожь его!',
+    type:'kill', filter:e=>e.id==='lich', need:1,
+    reward:{ gold:600, items:{potion_l:3}, unlock:['volcano'] }, next:'q_dragon'
+  },
+  q_dragon: {
+    title:'Древний Дракон', giver:'port',
+    desc:'Капитан: «Только победа над Древним Драконом сделает тебя легендой.»',
+    type:'kill', filter:e=>e.id==='dragon', need:1,
+    reward:{ gold:2000 }, accept:{ unlock:['lair'] }, final:true
+  },
+  // Побочные
+  q_snow: {
+    title:'Сердце льда', giver:'port',
+    desc:'(побочный) Победи Ледяного Короля в Ледяных Пиках.',
+    type:'kill', filter:e=>e.id==='snowking', need:1,
+    reward:{ gold:700, items:{ring_int:1} }, side:true
+  },
+  q_phoenix: {
+    title:'Пепел и пламя', giver:'port',
+    desc:'(побочный) Победи Древнего Феникса в Огненном Хребте.',
+    type:'kill', filter:e=>e.id==='phoenix', need:1,
+    reward:{ gold:900, items:{amulet_crit:1} }, side:true
+  },
+  q_wolves: {
+    title:'Волчья стая', giver:'village',
+    desc:'(побочный) Перебей 5 тёмных волков в лесу.',
+    type:'kill', filter:e=>e.id==='wolf', need:5,
+    reward:{ gold:120, items:{potion_m:2} }, side:true
+  },
+  q_trolls: {
+    title:'Тролли в пещерах', giver:'port',
+    desc:'(побочный) Убей 2 пещерных тролля.',
+    type:'kill', filter:e=>e.id==='troll', need:2,
+    reward:{ gold:300, items:{potion_l:1,mana_m:2} }, side:true
+  }
+};
+
+// ==================== СОСТОЯНИЕ ====================
+let P = null, Es = [], target = 0, inCombat = false;
+let combatTick = null, lastRegen = 0;
+let unlocked = ['village','forest'];
+let logHistory = [];
+const SAVE_KEY = 'sumrachnye_zemli_save_v3';
+
+const $ = id => document.getElementById(id);
+const rnd = (a,b) => Math.floor(Math.random()*(b-a+1))+a;
+
+const log = (msg, cls='', _skip=false) => {
+  const l = $('log');
+  const p = document.createElement('p');
+  if (cls) p.className = cls;
+  p.innerHTML = msg;
+  l.appendChild(p);
+  l.scrollTop = l.scrollHeight;
+  while (l.children.length > 100) l.removeChild(l.firstChild);
+  if (!_skip) logHistory.push({ t:'p', msg, cls });
+};
+const hr = (_skip=false) => {
+  const l=$('log'); const h=document.createElement('hr'); l.appendChild(h); l.scrollTop=l.scrollHeight;
+  if (!_skip) logHistory.push({ t:'hr' });
+};
+function restoreLog() {
+  const l = $('log'); l.innerHTML='';
+  for (const e of logHistory) {
+    if (e.t==='hr') { const h=document.createElement('hr'); l.appendChild(h); }
+    else { const p=document.createElement('p'); if (e.cls) p.className=e.cls; p.innerHTML=e.msg; l.appendChild(p); }
+  }
+  l.scrollTop = l.scrollHeight;
+}
+
+// ==================== СОХРАНЕНИЕ ====================
+let saveScheduled = null;
+function save() {
+  if (!P) return;
+  if (saveScheduled) return;
+  saveScheduled = setTimeout(() => {
+    saveScheduled = null;
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify({ P, Es, target, inCombat, unlocked, logHistory: logHistory.slice(-80) }));
+      flashSave();
+    } catch(e) {}
+  }, 400);
+}
+function loadSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return false;
+    const d = JSON.parse(raw);
+    P = d.P; Es = d.Es || []; target = d.target||0; inCombat = d.inCombat; unlocked = d.unlocked || ['village','forest'];
+    if (P && !P.stages) P.stages = Object.fromEntries(Object.keys(LOCATIONS).map(k=>[k,1]));
+    if (P && P.stages) { for (const k of Object.keys(LOCATIONS)) if (!P.stages[k]) P.stages[k]=1; }
+    if (P) migrateEquipment();
+    if (P && CLASSES[P.cls]) { P.ico = CLASSES[P.cls].ico; P.className = CLASSES[P.cls].name; }
+    if (P) { if (!P.spellLvl) P.spellLvl = {}; if (typeof P.skillPts !== 'number') P.skillPts = 0; }
+    if (P && !P.market) { P.market = null; regenMarket(); }
+    logHistory = d.logHistory || [];
+    return true;
+  } catch(e) { return false; }
+}
+function newGame() {
+  if (P && !confirm('Удалить сохранение и начать новую игру?')) return;
+  localStorage.removeItem(SAVE_KEY); location.reload();
+}
+let saveTimer=null;
+function flashSave() {
+  const el = $('save-indicator'); if (!el) return;
+  el.style.color='#6abe30'; el.textContent='● сохранено';
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{ el.style.color='#4a2818'; el.textContent='○ сохранено'; }, 1200);
+}
+
+// ==================== ЭКВИП И СТАТЫ ====================
+const SLOTS = ['head','amulet','shoulders','body','belt','weapon','offhand','ring','art1','art2','art3'];
+const SLOT_NAMES = { head:'Голова', amulet:'Амулет', shoulders:'Плечи', body:'Тело', belt:'Пояс', weapon:'Оружие', offhand:'Защита', ring:'Кольцо', art1:'Артефакт I', art2:'Артефакт II', art3:'Артефакт III' };
+const SLOT_FITS = {
+  head:i=>i.slot==='head', amulet:i=>i.slot==='amulet', shoulders:i=>i.slot==='shoulders',
+  body:i=>i.slot==='body', belt:i=>i.slot==='belt', weapon:i=>i.slot==='weapon' && (!i.cls || i.cls===(P&&P.cls)),
+  offhand:i=>(i.slot==='offhand'||(i.slot==='weapon' && (!i.cls || i.cls===(P&&P.cls)))), ring:i=>i.slot==='ring',
+  art1:i=>i.slot==='artifact', art2:i=>i.slot==='artifact', art3:i=>i.slot==='artifact'
+};
+function instBonuses(inst) {
+  if (!inst || !ITEMS[inst.id]) return {};
+  const it = ITEMS[inst.id]; const L = inst.enchant||0; const mul = 1 + 0.1*L;
+  const out = {};
+  if (it.bonuses) for (const k in it.bonuses) out[k] = Math.ceil(it.bonuses[k] * mul);
+  if (it.armor) out.armor = Math.ceil(it.armor * mul);
+  if (it.wdmg) out.wdmg = [Math.round(it.wdmg[0]*mul), Math.round(it.wdmg[1]*mul)];
+  return out;
+}
+function enchantCost(inst) {
+  if (!inst || !ITEMS[inst.id]) return 0;
+  const L = inst.enchant||0;
+  return Math.ceil((ITEMS[inst.id].price||100) * 0.5 * (L+1)*(L+1));
+}
+function eff(stat) {
+  if (!P) return 0;
+  let str=P.str, agi=P.agi, intel=P.int, hpMax=P.hpMax, mpMax=P.mpMax, crit=0, regen=0, armor=0, wdmg=null;
+  for (const s of SLOTS) {
+    const b = instBonuses(P.equipped[s]);
+    str+=b.str||0; agi+=b.agi||0; intel+=b.int||0;
+    hpMax+=b.hpMax||0; mpMax+=b.mpMax||0;
+    crit+=b.crit||0; regen+=b.regen||0; armor+=b.armor||0;
+    if (b.wdmg && (s==='weapon' || s==='offhand')) {
+      wdmg = wdmg ? [wdmg[0]+b.wdmg[0], wdmg[1]+b.wdmg[1]] : b.wdmg.slice();
+    }
+  }
+  if (stat==='str') return str;
+  if (stat==='agi') return agi;
+  if (stat==='int') return intel;
+  if (stat==='hpMax') return hpMax;
+  if (stat==='mpMax') return mpMax;
+  if (stat==='crit') return agi*2 + crit;
+  if (stat==='regen') return regen;
+  if (stat==='armor') return armor;
+  if (stat==='wdmg') return wdmg || [1,3];
+  return 0;
+}
+function migrateEquipment() {
+  if (!P) return;
+  if (!Array.isArray(P.equipInv)) P.equipInv = [];
+  if (!P.equipped) P.equipped = {};
+  const eq = P.equipped;
+  const legacy = typeof eq.weapon === 'string' || typeof eq.armor === 'string' || typeof eq.accessory === 'string';
+  if (legacy) {
+    const ne = {}; for (const s of SLOTS) ne[s] = null;
+    if (typeof eq.weapon === 'string') ne.weapon = { id: eq.weapon, enchant: 0 };
+    if (typeof eq.armor === 'string')  ne.body   = { id: eq.armor,  enchant: 0 };
+    if (typeof eq.accessory === 'string') {
+      const id = eq.accessory;
+      const it = ITEMS[id];
+      const slot = (it && it.slot) || (id.startsWith('ring_')?'ring':'amulet');
+      const target = slot==='artifact' ? 'art1' : slot;
+      if (SLOTS.includes(target)) ne[target] = { id, enchant: 0 };
+    }
+    P.equipped = ne;
+  } else {
+    for (const s of SLOTS) if (!(s in P.equipped)) P.equipped[s] = null;
+  }
+}
+
+// ==================== СТАРТ ====================
+document.querySelectorAll('.cls').forEach(el => {
+  el.addEventListener('click', () => {
+    const cls = el.dataset.cls;
+    const name = $('name-input').value.trim() || 'Безымянный';
+    startGame(name, cls);
+  });
+});
+
+if (loadSave() && P) {
+  $('start-modal').classList.remove('show');
+  render(); restoreLog();
+  log(`<span class="sys">— игра загружена из сохранения —</span>`);
+  if (inCombat && Es.length) {
+    for (const e of Es) scheduleEnemy(e, true);
+    startCombatLoop();
+  }
+}
+
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    ['inv','map','quest'].forEach(k => $('tab-'+k).style.display = (k===t.dataset.tab?'block':'none'));
+  });
+});
+
+function startGame(name, cls) {
+  const c = CLASSES[cls];
+  P = {
+    name, cls, ico:c.ico, className:c.name,
+    lvl:1, xp:0, xpNext:100, gold:25,
+    hp:c.hp, hpMax:c.hp, mp:c.mp, mpMax:c.mp,
+    str:c.str, agi:c.agi, int:c.int,
+    equipped:(()=>{ const e={}; for(const s of SLOTS) e[s]=null; e.weapon={id:c.weapon,enchant:0}; return e; })(),
+    equipInv:[],
+    inv:{ potion_s:2, mana_s: cls==='mage'?2:0 },
+    spells:Object.keys(SPELLS).filter(k=>SPELLS[k].cls.includes(cls)),
+    spellCd:{}, spellLvl:{}, skillPts:0,
+    location:'village',
+    quests:{ active:{}, completed:[], available:['q_rats','q_wolves'] },
+    killedBosses:[],
+    stages: Object.fromEntries(Object.keys(LOCATIONS).map(k=>[k,1])),
+    market: null
+  };
+  regenMarket();
+  $('start-modal').classList.remove('show');
+  hr();
+  log(`<span class="epic"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> ${name} (${c.name}) вступает в Сумрачные Земли! <img class="gi" src="assets/icons/crossed-swords.svg" alt=""></span>`);
+  log(`<span class="sys">Загляни в Свиток (вкладка справа) — там ждут задания.</span>`);
+  render();
+}
+
+// ==================== РЕНДЕР ====================
+function render() {
+  if (!P) return;
+  save();
+  setBar('hp', P.hp, eff('hpMax'));
+  setBar('mp', P.mp, eff('mpMax'));
+  setBar('xp', P.xp, P.xpNext);
+
+  const wd = eff('wdmg');
+  $('stats-body').innerHTML = `
+    <div class="stat-row"><span><img class="gi" src="assets/icons/muscle-up.svg" alt=""> Сила</span><span>${eff('str')}${P.str!==eff('str')?`<span class="bonus">(+${eff('str')-P.str})</span>`:''}</span></div>
+    <div class="stat-row"><span><img class="gi" src="assets/icons/run.svg" alt=""> Ловкость</span><span>${eff('agi')}${P.agi!==eff('agi')?`<span class="bonus">(+${eff('agi')-P.agi})</span>`:''}</span></div>
+    <div class="stat-row"><span><img class="gi" src="assets/icons/brain.svg" alt=""> Интеллект</span><span>${eff('int')}${P.int!==eff('int')?`<span class="bonus">(+${eff('int')-P.int})</span>`:''}</span></div>
+    <div class="stat-row"><span><img class="gi" src="assets/icons/round-shield.svg" alt=""> Защита</span><span>${eff('armor')}</span></div>
+    <div class="stat-row"><span><img class="gi" src="assets/icons/polar-star.svg" alt=""> Шанс крита</span><span>${eff('crit')}%</span></div>
+    <div class="stat-row"><span><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Урон</span><span>${wd[0]}—${wd[1]}</span></div>
+    <div class="stat-row"><span><img class="gi" src="assets/icons/two-coins.svg" alt=""> Золото</span><span>${P.gold}</span></div>
+  `;
+
+  renderEquipGrid();
+
+  const loc = LOCATIONS[P.location];
+  $('scene-art').innerHTML = loc.ico;
+  $('scene-name').textContent = loc.name;
+  $('scene-desc').textContent = loc.desc;
+
+  renderInv(); renderSpells(); renderQuestItems();
+  renderMap(); renderQuests(); renderActions(); renderCombat(); renderStageBar();
+}
+
+function describeInst(inst) {
+  if (!inst) return '';
+  const it = ITEMS[inst.id]; if (!it) return '';
+  const b = instBonuses(inst);
+  const parts = [];
+  if (b.wdmg) parts.push(`урон ${b.wdmg[0]}—${b.wdmg[1]}`);
+  if (b.armor) parts.push(`защита +${b.armor}`);
+  if (b.str) parts.push(`+${b.str} STR`);
+  if (b.agi) parts.push(`+${b.agi} AGI`);
+  if (b.int) parts.push(`+${b.int} INT`);
+  if (b.hpMax) parts.push(`+${b.hpMax} HP`);
+  if (b.mpMax) parts.push(`+${b.mpMax} MP`);
+  if (b.crit) parts.push(`+${b.crit}% крит`);
+  if (b.regen) parts.push(`реген ${b.regen}/ход`);
+  return parts.join(', ');
+}
+
+function renderEquipGrid() {
+  const layout = [
+    {slot:'head',      col:1, row:1},
+    {slot:'shoulders', col:1, row:2},
+    {slot:'body',      col:1, row:3},
+    {slot:'belt',      col:1, row:4},
+    {slot:'weapon',    col:2, row:4},
+    {slot:'offhand',   col:2, row:5},
+    {slot:'amulet',    col:3, row:1},
+    {slot:'ring',      col:3, row:2},
+    {slot:'art1',      col:3, row:3},
+    {slot:'art2',      col:3, row:4},
+    {slot:'art3',      col:3, row:5}
+  ];
+  const heroIco = (P && P.ico) || '<img class="gi" src="assets/icons/wizard-face.svg" alt="">';
+  const PLACEHOLDER = {
+    head:'visored-helm', amulet:'prayer-beads', shoulders:'shoulder-armor',
+    body:'breastplate', belt:'knot', weapon:'crossed-swords',
+    offhand:'round-shield', ring:'diamond-ring',
+    art1:'cut-diamond', art2:'crystal-ball', art3:'star-formation'
+  };
+  const metaEl = $('hero-meta'); if (metaEl) metaEl.textContent = `— ${P.className} • ур. ${P.lvl}`;
+  let html = `<div class="equip-grid"><div class="esl esl-hero" title="${P.name} — умения класса" onclick="openHeroModal()"><div class="hero-ico-box">${heroIco}</div></div>`;
+  for (const {slot,col,row} of layout) {
+    const inst = P.equipped[slot];
+    const it = inst ? ITEMS[inst.id] : null;
+    const empty = !inst;
+    const ench = inst && inst.enchant>0 ? `<span class="ench">+${inst.enchant}</span>` : '';
+    const title = it ? `${it.name}${inst.enchant>0?' +'+inst.enchant:''} — ${describeInst(inst)}` : SLOT_NAMES[slot]+' (пусто)';
+    const icoHtml = it ? it.ico : `<img class="gi slot-ph" src="assets/icons/${PLACEHOLDER[slot]}.svg" alt="">`;
+    html += `<div class="esl ${empty?'empty':''}" style="grid-column:${col};grid-row:${row}" onclick="openSlotModal('${slot}')" title="${title.replace(/"/g,'&quot;')}">${icoHtml}${ench}</div>`;
+  }
+  html += '</div>';
+  $('equip-body').innerHTML = html;
+}
+
+function openSlotModal(slot) {
+  const m = $('slot-modal-inner');
+  const inst = P.equipped[slot];
+  if (inst) {
+    const it = ITEMS[inst.id];
+    const cost = enchantCost(inst);
+    const can = P.gold >= cost;
+    m.innerHTML = `
+      <h2 style="margin:0 0 10px 0;text-align:left;font-size:18px">${it.ico} ${it.name}${inst.enchant>0?` <span style="color:#f4d03f">+${inst.enchant}</span>`:''}</h2>
+      <div style="color:#8b6f47;font-size:11px;margin-bottom:6px">${SLOT_NAMES[slot]}</div>
+      <div style="color:#d4b87a;font-size:12px;margin-bottom:8px">${it.desc||''}</div>
+      <div style="color:#5fb3d4;font-size:12px;margin-bottom:14px">${describeInst(inst)}</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="act" onclick="unequipSlot('${slot}')">Снять</button>
+        <button class="act" onclick="enchantSlot('${slot}')" ${can?'':'disabled'}>Зачаровать (${cost} <img class="gi" src="assets/icons/two-coins.svg" alt="">)</button>
+        <button class="act" style="margin-left:auto" onclick="closeSlotModal()">Закрыть</button>
+      </div>`;
+  } else {
+    const fits = SLOT_FITS[slot];
+    const list = P.equipInv.map((inst,i)=>({inst,i})).filter(x => ITEMS[x.inst.id] && fits(ITEMS[x.inst.id]));
+    const items = list.length
+      ? list.map(({inst,i}) => {
+          const it = ITEMS[inst.id];
+          return `<div class="slot-item" onclick="equipFromInv(${i},'${slot}')">
+            <span>${it.ico}</span>
+            <span style="flex:1"><span style="color:#f4d03f">${it.name}</span>${inst.enchant>0?` <span style="color:#f4d03f">+${inst.enchant}</span>`:''}<div style="color:#8b6f47;font-size:11px">${describeInst(inst)}</div></span>
+          </div>`;
+        }).join('')
+      : '<div style="color:#6b4423;font-style:italic;font-size:12px;padding:12px;text-align:center">— нет подходящих предметов в сумке —</div>';
+    m.innerHTML = `
+      <h2 style="margin:0 0 10px 0;text-align:left;font-size:18px">Слот: ${SLOT_NAMES[slot]}</h2>
+      <div style="max-height:50vh;overflow-y:auto">${items}</div>
+      <div style="margin-top:14px;text-align:right"><button class="act" onclick="closeSlotModal()">Закрыть</button></div>`;
+  }
+  $('slot-modal').classList.add('show');
+}
+function closeSlotModal(){ $('slot-modal').classList.remove('show'); }
+const SPELL_MAX_LVL = 5;
+function openHeroModal() {
+  const m = $('slot-modal-inner');
+  const pts = P.skillPts || 0;
+  const list = P.spells.map(k => {
+    const s = SPELLS[k];
+    const lvl = (P.spellLvl && P.spellLvl[k]) || 0;
+    const maxed = lvl >= SPELL_MAX_LVL;
+    const canUp = !maxed && pts > 0;
+    const bonus = Math.round(0.2 * lvl * 100);
+    const nextBonus = Math.round(0.2 * (lvl+1) * 100);
+    const effectLbl = maxed
+      ? `<span style="color:#6abe30">макс. +${bonus}%</span>`
+      : `текущий +${bonus}% → <span style="color:#f4d03f">+${nextBonus}%</span>`;
+    const btn = maxed
+      ? `<button class="act" disabled>Максимум</button>`
+      : `<button class="act" onclick="upgradeSpell('${k}')" ${canUp?'':'disabled'}>Улучшить (1 очко)</button>`;
+    return `<div class="slot-item" style="align-items:flex-start;flex-direction:column;gap:4px">
+      <div style="display:flex;gap:10px;align-items:center;width:100%">
+        <span>${s.ico}</span>
+        <span style="flex:1"><b>${s.name}</b>${lvl>0?` <span style="color:#f4d03f">+${lvl}</span>`:''} <span style="color:#5fb3d4">(${s.cost} MP)</span></span>
+        ${btn}
+      </div>
+      <div style="color:#d4b87a;font-size:11px;padding-left:38px">${s.desc}</div>
+      <div style="color:#8b6f47;font-size:11px;padding-left:38px">${effectLbl}</div>
+    </div>`;
+  }).join('');
+  m.innerHTML = `
+    <h2 style="margin:0 0 6px 0;text-align:left;font-size:18px">${P.ico} ${P.name} — ${P.className} ур. ${P.lvl}</h2>
+    <div style="color:#f4d03f;font-size:12px;margin-bottom:10px">Очки умений: <b>${pts}</b> <span style="color:#8b6f47">(за уровень: +1; каждое улучшение даёт +20% к эффекту заклинания)</span></div>
+    <div style="max-height:55vh;overflow-y:auto">${list || '<div style="color:#6b4423;font-style:italic">нет умений</div>'}</div>
+    <div style="margin-top:14px;text-align:right"><button class="act" onclick="closeSlotModal()">Закрыть</button></div>`;
+  $('slot-modal').classList.add('show');
+}
+function upgradeSpell(key) {
+  if (!P.spellLvl) P.spellLvl = {};
+  const lvl = P.spellLvl[key] || 0;
+  if (lvl >= SPELL_MAX_LVL) return;
+  if ((P.skillPts||0) < 1) return;
+  P.skillPts -= 1;
+  P.spellLvl[key] = lvl + 1;
+  log(`<span class="magic">Умение «${SPELLS[key].name}» улучшено до +${lvl+1}.</span>`);
+  openHeroModal(); renderSpells(); save();
+}
+function equipFromInv(invIdx, slot) {
+  const inst = P.equipInv[invIdx];
+  if (!inst) return;
+  const it = ITEMS[inst.id]; if (!it) return;
+  if (!SLOT_FITS[slot](it)) return;
+  P.equipInv.splice(invIdx, 1);
+  const prev = P.equipped[slot];
+  P.equipped[slot] = inst;
+  if (prev) P.equipInv.push(prev);
+  P.hp = Math.min(P.hp, eff('hpMax'));
+  P.mp = Math.min(P.mp, eff('mpMax'));
+  closeSlotModal();
+  render();
+}
+function unequipSlot(slot) {
+  const inst = P.equipped[slot];
+  if (!inst) return;
+  P.equipInv.push(inst);
+  P.equipped[slot] = null;
+  P.hp = Math.min(P.hp, eff('hpMax'));
+  P.mp = Math.min(P.mp, eff('mpMax'));
+  closeSlotModal();
+  render();
+}
+function enchantSlot(slot) {
+  const inst = P.equipped[slot];
+  if (!inst) return;
+  const cost = enchantCost(inst);
+  if (P.gold < cost) return;
+  P.gold -= cost;
+  inst.enchant = (inst.enchant||0) + 1;
+  log(`<span class="good"><img class="gi" src="assets/icons/sparkles.svg" alt=""> ${ITEMS[inst.id].name} зачарован до +${inst.enchant}!</span>`);
+  openSlotModal(slot);
+  render();
+}
+
+function setBar(key, v, m) {
+  const pct = Math.max(0, Math.min(100, v/m*100));
+  const fill = $(key+'-fill');
+  const ghost = $(key+'-ghost');
+  fill.style.width = pct + '%';
+  if (ghost) {
+    const prev = parseFloat(ghost.style.width) || 0;
+    if (pct > prev) {
+      // лечение — призрак сразу догоняет, без анимации
+      const t = ghost.style.transition;
+      ghost.style.transition = 'none';
+      ghost.style.width = pct + '%';
+      void ghost.offsetWidth;
+      ghost.style.transition = t;
+    } else {
+      // урон — призрак плавно опустится (delay+transition из CSS)
+      ghost.style.width = pct + '%';
+    }
+  }
+  $(key+'-lbl').textContent = `${Math.max(0,Math.floor(v))}/${m}`;
+}
+
+function renderInv() {
+  const items = Object.keys(P.inv).filter(k => P.inv[k]>0 && ITEMS[k] && ITEMS[k].type==='consumable');
+  if (!items.length) { $('inv-body').innerHTML='<div style="color:#6b4423;font-style:italic;font-size:11px">пусто</div>'; return; }
+  $('inv-body').innerHTML = items.map(k => {
+    const it = ITEMS[k];
+    const canUse = inCombat ? (it.combat || it.use) : !!it.use;
+    return `<div class="item">
+      <span class="ico">${it.ico}</span>
+      <span class="nm" title="${it.desc||''}">${it.name}</span>
+      <span class="qty">×${P.inv[k]}</span>
+      <button class="tiny" onclick="useItem('${k}')" ${canUse?'':'disabled'}>исп.</button>
+    </div>`;
+  }).join('');
+}
+
+function renderSpells() {
+  if (!P.spells.length) { $('spells-body').innerHTML='<div style="color:#6b4423;font-style:italic;font-size:11px">не изучено</div>'; return; }
+  if (!P.spellCd) P.spellCd = {};
+  const now = Date.now();
+  $('spells-body').innerHTML = P.spells.map((k, idx) => {
+    const s = SPELLS[k];
+    const cdLeft = Math.max(0, Math.ceil(((P.spellCd[k]||0) - now)/1000));
+    const can = P.mp>=s.cost && inCombat && cdLeft===0;
+    const hot = idx<5 ? `<span style="color:#8b6f47;font-size:10px">[${idx+1}]</span> ` : '';
+    const btnLbl = cdLeft>0 ? `${cdLeft}с` : 'каст';
+    const lvl = (P.spellLvl && P.spellLvl[k]) || 0;
+    const lvlBadge = lvl>0 ? ` <span style="color:#f4d03f">+${lvl}</span>` : '';
+    return `<div class="item">
+      <span class="ico">${s.ico}</span>
+      <span class="nm" title="${s.desc}">${hot}${s.name}${lvlBadge} <span style="color:#5fb3d4">(${s.cost})</span></span>
+      <button class="tiny" onclick="cast('${k}')" ${can?'':'disabled'}>${btnLbl}</button>
+    </div>`;
+  }).join('');
+}
+
+function renderQuestItems() {
+  const items = Object.keys(P.inv).filter(k => P.inv[k]>0 && ITEMS[k] && ITEMS[k].type==='quest');
+  if (!items.length) { $('quest-items-body').innerHTML='<div style="color:#6b4423;font-style:italic;font-size:11px">пусто</div>'; return; }
+  $('quest-items-body').innerHTML = items.map(k => {
+    const it = ITEMS[k];
+    return `<div class="item"><span class="ico">${it.ico}</span><span class="nm">${it.name}</span><span class="qty">×${P.inv[k]}</span></div>`;
+  }).join('');
+}
+
+function renderMap() {
+  $('map-body').innerHTML = unlocked.map(k => {
+    const l = LOCATIONS[k];
+    const cur = P.location===k;
+    const st = P.stages?.[k]||1;
+    return `<button class="small" ${(cur||inCombat)?'disabled':''} onclick="travel('${k}')">${l.ico} ${l.name} <span style="opacity:.7">[эт.${st}]</span>${cur?' (здесь)':''}</button>`;
+  }).join('');
+}
+
+// ==================== КВЕСТЫ — ЛОГИКА ====================
+function questProgress(qid) {
+  const q = QUESTS[qid];
+  if (q.type==='collect') return Math.min(P.inv[q.item]||0, q.need);
+  if (q.type==='visit')   return P.quests.active[qid]?.visited ? 1 : 0;
+  return P.quests.active[qid]?.kills || 0;
+}
+function questNeed(q) { return q.type==='visit' ? 1 : q.need; }
+function questDone(qid) { return questProgress(qid) >= questNeed(QUESTS[qid]); }
+
+function acceptQuest(qid) {
+  if (P.quests.active[qid] || P.quests.completed.includes(qid)) return;
+  P.quests.active[qid] = { kills:0, visited:false };
+  P.quests.available = P.quests.available.filter(x=>x!==qid);
+  const q = QUESTS[qid];
+  if (q.accept?.unlock) {
+    for (const u of q.accept.unlock) if (!unlocked.includes(u)) unlocked.push(u);
+    log(`<span class="info">Открыто на карте: ${q.accept.unlock.map(u=>LOCATIONS[u].name).join(', ')}.</span>`);
+  }
+  log(`<span class="quest"><img class="gi" src="assets/icons/star-formation.svg" alt=""> Принято задание: <b>${q.title}</b>.</span> <span class="sys">${q.desc}</span>`);
+  // visit auto-check
+  if (q.type==='visit' && P.location===q.target) {
+    P.quests.active[qid].visited = true;
+  }
+  render();
+}
+
+function claimQuest(qid) {
+  const q = QUESTS[qid];
+  if (!questDone(qid)) return;
+  if (P.location !== q.giver) { log(`<span class="bad">Нужно вернуться к заказчику в ${LOCATIONS[q.giver].name}.</span>`); return; }
+  // collect: spend items
+  if (q.type==='collect') P.inv[q.item] = Math.max(0, (P.inv[q.item]||0) - q.need);
+  // rewards
+  if (q.reward.gold) P.gold += q.reward.gold;
+  if (q.reward.items) for (const [k,n] of Object.entries(q.reward.items)) P.inv[k] = (P.inv[k]||0)+n;
+  if (q.reward.unlock) {
+    for (const u of q.reward.unlock) if (!unlocked.includes(u)) unlocked.push(u);
+  }
+  delete P.quests.active[qid];
+  P.quests.completed.push(qid);
+  hr();
+  log(`<span class="epic"><img class="gi" src="assets/icons/star-formation.svg" alt=""> Задание «${q.title}» выполнено!</span>`);
+  if (q.reward.gold) log(`<span class="gold">+${q.reward.gold} <img class="gi" src="assets/icons/two-coins.svg" alt=""></span>`);
+  if (q.reward.items) log(`<span class="good">Получено: ${Object.entries(q.reward.items).map(([k,n])=>ITEMS[k].name+' ×'+n).join(', ')}.</span>`);
+  if (q.reward.unlock) log(`<span class="info">Открыто на карте: ${q.reward.unlock.map(u=>LOCATIONS[u].name).join(', ')}.</span>`);
+  if (q.next && !P.quests.completed.includes(q.next) && !P.quests.active[q.next] && !P.quests.available.includes(q.next)) {
+    P.quests.available.push(q.next);
+    log(`<span class="quest">→ Появилось новое задание: «${QUESTS[q.next].title}» (у ${LOCATIONS[QUESTS[q.next].giver].name}).</span>`);
+  }
+  if (q.final) victory();
+  // unlock side quests once port reached
+  if (qid==='q_port') {
+    ['q_snow','q_phoenix','q_bandits','q_trolls'].forEach(s => {
+      if (!P.quests.completed.includes(s) && !P.quests.active[s] && !P.quests.available.includes(s)) {
+        // bandits added by chain; others stay side
+      }
+    });
+  }
+  render();
+}
+
+function onKill(enemy) {
+  for (const qid of Object.keys(P.quests.active)) {
+    const q = QUESTS[qid];
+    if (q.type==='kill' && q.filter && q.filter(enemy)) {
+      P.quests.active[qid].kills = (P.quests.active[qid].kills||0)+1;
+      if (questDone(qid)) log(`<span class="quest"><img class="gi" src="assets/icons/check-mark.svg" alt=""> Задание «${q.title}» готово к сдаче — вернись в ${LOCATIONS[q.giver].name}.</span>`);
+    }
+  }
+}
+function onTravel() {
+  for (const qid of Object.keys(P.quests.active)) {
+    const q = QUESTS[qid];
+    if (q.type==='visit' && q.target===P.location) {
+      P.quests.active[qid].visited = true;
+      log(`<span class="quest"><img class="gi" src="assets/icons/check-mark.svg" alt=""> Задание «${q.title}» готово к сдаче — поговори с заказчиком.</span>`);
+    }
+  }
+}
+function onCollect(itemId) {
+  for (const qid of Object.keys(P.quests.active)) {
+    const q = QUESTS[qid];
+    if (q.type==='collect' && q.item===itemId && questDone(qid)) {
+      log(`<span class="quest"><img class="gi" src="assets/icons/check-mark.svg" alt=""> Задание «${q.title}» готово к сдаче — вернись в ${LOCATIONS[q.giver].name}.</span>`);
+    }
+  }
+}
+
+function renderQuests() {
+  // available at this location
+  const avail = P.quests.available.filter(qid => QUESTS[qid].giver===P.location);
+  const elsewhere = P.quests.available.filter(qid => QUESTS[qid].giver!==P.location);
+  let html = '';
+  if (avail.length) {
+    html += avail.map(qid => {
+      const q = QUESTS[qid];
+      return `<div class="quest-card">
+        <div class="title">${q.side?'<img class="gi" src="assets/icons/sparkles.svg" alt=""> ':''}${q.title}</div>
+        <div class="desc">${q.desc}</div>
+        <div class="reward">Награда: ${q.reward.gold||0}<img class="gi" src="assets/icons/two-coins.svg" alt="">${q.reward.items?', '+Object.entries(q.reward.items).map(([k,n])=>ITEMS[k].name+' ×'+n).join(', '):''}</div>
+        <button class="tiny" style="margin-top:4px" onclick="acceptQuest('${qid}')">Принять</button>
+      </div>`;
+    }).join('');
+  }
+  if (elsewhere.length) {
+    html += `<div style="font-size:11px;color:#8b6f47;margin-top:4px;font-style:italic">Также ждут заказчики в: ${[...new Set(elsewhere.map(q=>LOCATIONS[QUESTS[q].giver].name))].join(', ')}</div>`;
+  }
+  if (!html) html = `<div style="color:#6b4423;font-style:italic;font-size:11px">здесь нет заказчиков</div>`;
+  $('avail-body').innerHTML = html;
+
+  // active
+  const actIds = Object.keys(P.quests.active);
+  if (actIds.length) {
+    $('active-body').innerHTML = actIds.map(qid => {
+      const q = QUESTS[qid];
+      const done = questDone(qid);
+      const prog = questProgress(qid), need = questNeed(q);
+      return `<div class="quest-card ${done?'done':''}">
+        <div class="title">${q.title}</div>
+        <div class="desc">${q.desc}</div>
+        <div class="progress">Прогресс: ${prog}/${need} ${done?'<b style="color:#6abe30"><img class="gi" src="assets/icons/check-mark.svg" alt=""> готово</b>':''}</div>
+        <div class="reward">Награда: ${q.reward.gold||0}<img class="gi" src="assets/icons/two-coins.svg" alt=""></div>
+        ${done?`<button class="tiny" style="margin-top:4px" onclick="claimQuest('${qid}')">${P.location===q.giver?'Сдать':'Вернуться к '+LOCATIONS[q.giver].name}</button>`:''}
+      </div>`;
+    }).join('');
+  } else {
+    $('active-body').innerHTML = `<div style="color:#6b4423;font-style:italic;font-size:11px">нет активных заданий</div>`;
+  }
+
+  // completed
+  if (P.quests.completed.length) {
+    $('done-body').innerHTML = P.quests.completed.map(qid => `<div style="color:#6abe30"><img class="gi" src="assets/icons/check-mark.svg" alt=""> ${QUESTS[qid].title}</div>`).join('');
+  } else {
+    $('done-body').innerHTML = `<div style="color:#6b4423;font-style:italic;font-size:11px">пусто</div>`;
+  }
+
+  // badge
+  const readyCount = Object.keys(P.quests.active).filter(questDone).length + avail.length;
+  const badge = $('quest-badge');
+  if (readyCount>0) { badge.style.display='inline'; badge.textContent=readyCount; }
+  else badge.style.display='none';
+}
+
+function renderActions() {
+  const el = $('actions');
+  if (inCombat) {
+    el.innerHTML = `
+      <button class="act" onclick="attack()"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Атаковать</button>
+      <button class="act" onclick="defend()"><img class="gi" src="assets/icons/round-shield.svg" alt=""> Защита</button>
+      <button class="act" onclick="flee()"><img class="gi" src="assets/icons/run.svg" alt=""> Бежать</button>
+      <button class="act" onclick="document.querySelector('[data-tab=inv]').click()"><img class="gi" src="assets/icons/knapsack.svg" alt=""> Сумка</button>
+    `; return;
+  }
+  const loc = LOCATIONS[P.location];
+  const btns = [];
+  if (loc.actions.includes('hunt')) btns.push(`<button class="act" onclick="hunt()"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Искать врагов</button>`);
+  if (loc.actions.includes('rest')) btns.push(`<button class="act" onclick="rest()"><img class="gi" src="assets/icons/sleepy.svg" alt=""> Отдохнуть</button>`);
+  if (loc.actions.includes('shop')) btns.push(`<button class="act" onclick="openShop()"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Лавка</button>`);
+  if (loc.actions.includes('inn'))  btns.push(`<button class="act" onclick="inn()"><img class="gi" src="assets/icons/beer-stein.svg" alt=""> Трактир</button>`);
+  btns.splice(3, 0, `<button class="act" onclick="openTrader()"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Торговец ресурсов</button>`);
+  el.innerHTML = btns.join('');
+}
+
+function stageProgressFrac() {
+  if (!inCombat || !Es.length) return 0;
+  let tot = 0, rem = 0;
+  for (const e of Es) { tot += e.hpMax; rem += Math.max(0, e.hp); }
+  return tot ? Math.max(0, Math.min(1, (tot-rem)/tot)) : 0;
+}
+function renderStageBar() {
+  const bar = $('stage-bar');
+  if (!bar) return;
+  const loc = P.location;
+  const cur = P.stages?.[loc] || 1;
+  const count = 7;
+  const start = Math.max(1, cur-2);
+  const prog = stageProgressFrac();
+  let html = `<span class="label">${LOCATIONS[loc].ico} Этап</span>`;
+  for (let i=0;i<count;i++) {
+    const s = start+i;
+    const done = s < cur;
+    const isCur = s === cur;
+    const isBoss = s%10===0;
+    const cls = ['stage-chk'];
+    if (done) cls.push('done');
+    if (isCur) cls.push('cur');
+    if (isBoss) cls.push('boss');
+    html += `<div class="${cls.join(' ')}" title="Этап ${s}${isBoss?' — босс':''}">${s}</div>`;
+    if (i<count-1) {
+      let fill = 0;
+      if (done) fill = 100;
+      else if (isCur) fill = Math.round(prog*100);
+      html += `<div class="stage-link"><div class="fill" style="width:${fill}%"></div></div>`;
+    }
+  }
+  bar.innerHTML = html;
+}
+function updateStageProgress() {
+  const bar = $('stage-bar');
+  if (!bar) return;
+  const links = bar.querySelectorAll('.stage-link .fill');
+  const cur = P.stages?.[P.location] || 1;
+  const start = Math.max(1, cur-2);
+  const prog = stageProgressFrac();
+  links.forEach((el, i) => {
+    const s = start+i;
+    if (s < cur) el.style.width = '100%';
+    else if (s === cur) el.style.width = Math.round(prog*100) + '%';
+    else el.style.width = '0%';
+  });
+}
+
+function renderCombat() {
+  const ca = $('combat-area');
+  ca.style.display = inCombat ? 'flex' : 'none';
+  if (!inCombat) { ca.innerHTML = ''; return; }
+
+  let cards = ca.querySelectorAll('.enemy-card');
+  const needRebuild = cards.length !== Es.length;
+  if (needRebuild) {
+    ca.innerHTML = Es.map((e,i) => `<div class="enemy-card" data-i="${i}" onclick="selectTarget(${i})">
+      <div class="portrait">${e.ico}</div>
+      <div class="info">
+        <div class="name">${e.name}</div>
+        <div class="lvl">ур. ${e.lvl}${e.boss?' • БОСС':''}</div>
+        <div class="bar hp"><div class="ghost"></div><div class="fill"></div><div class="label"></div></div>
+      </div>
+    </div>`).join('');
+    cards = ca.querySelectorAll('.enemy-card');
+  }
+
+  const aliveCount = Es.filter(e => e.hp > 0).length;
+  const cardW = aliveCount <= 1 ? 100 : 60;
+  const step = aliveCount > 1 ? (100 - cardW) / (aliveCount - 1) : 0;
+  const marginLeft = step - cardW;
+
+  let slot = 0;
+  Es.forEach((e, i) => {
+    const card = cards[i];
+    if (!card) return;
+    const dead = e.hp <= 0;
+    const sel = !dead && i === target;
+    card.classList.toggle('dead', dead);
+    card.classList.toggle('target', sel);
+    if (dead) {
+      card.style.zIndex = '0';
+    } else {
+      card.style.zIndex = String(sel ? 2000 : 1000 - slot);
+      card.style.flexBasis = cardW + '%';
+      card.style.marginLeft = slot === 0 ? '0' : marginLeft + '%';
+      slot++;
+    }
+
+    const pct = Math.max(0, Math.min(100, e.hp/e.hpMax*100));
+    const fill = card.querySelector('.fill');
+    const ghost = card.querySelector('.ghost');
+    const label = card.querySelector('.label');
+    fill.style.width = pct + '%';
+    label.textContent = `${Math.max(0,Math.floor(e.hp))}/${e.hpMax}`;
+    if (!ghost.style.width) {
+      ghost.style.transition = 'none';
+      ghost.style.width = pct + '%';
+      void ghost.offsetWidth;
+      ghost.style.transition = '';
+    } else {
+      const prevGW = parseFloat(ghost.style.width) || 0;
+      if (pct > prevGW) {
+        const t = ghost.style.transition;
+        ghost.style.transition = 'none';
+        ghost.style.width = pct + '%';
+        void ghost.offsetWidth;
+        ghost.style.transition = t;
+      } else {
+        ghost.style.width = pct + '%';
+      }
+    }
+  });
+}
+function selectTarget(i) {
+  if (!inCombat || !Es[i] || Es[i].hp<=0) return;
+  target = i;
+  renderCombat();
+}
+function aliveIdx() { return Es.map((e,i)=>e.hp>0?i:-1).filter(i=>i>=0); }
+function ensureTarget() {
+  if (!Es[target] || Es[target].hp<=0) {
+    const a = aliveIdx();
+    target = a.length ? a[0] : 0;
+  }
+}
+
+// ==================== ДЕЙСТВИЯ ====================
+function travel(loc) {
+  if (inCombat) return;
+  P.location = loc;
+  log(`<span class="info">→ Ты прибываешь: <b>${LOCATIONS[loc].name}</b>.</span>`);
+  onTravel();
+  render();
+}
+function rest() {
+  P.hp = Math.min(eff('hpMax'), P.hp + 20);
+  P.mp = Math.min(eff('mpMax'), P.mp + 12);
+  log(`<span class="good">Ты отдыхаешь. +20 HP, +12 MP.</span>`);
+  render();
+}
+function inn() {
+  if (P.gold < 10) { log(`<span class="bad">Нужно 10 золотых для ночлега.</span>`); return; }
+  P.gold -= 10;
+  P.hp = eff('hpMax'); P.mp = eff('mpMax');
+  log(`<span class="good">Ты ночуешь в трактире. Полностью восстановлено. (-10 <img class="gi" src="assets/icons/two-coins.svg" alt="">)</span>`);
+  render();
+}
+
+// ==================== МАГАЗИН ====================
+let shopState = { tab:'weapon' };
+function openShop() {
+  const sid = LOCATIONS[P.location].shop;
+  if (!sid) return;
+  shopState.tab = 'weapon';
+  $('shop-modal').classList.add('show');
+  renderShop();
+}
+function closeShop() { $('shop-modal').classList.remove('show'); }
+function renderShop() {
+  const sid = LOCATIONS[P.location].shop;
+  const shop = SHOPS[sid];
+  $('shop-name').innerHTML = shop.name;
+  $('shop-gold').textContent = P.gold;
+  const tabs = [
+    { k:'weapon',     n:'<img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Оружие' },
+    { k:'armor',      n:'<img class="gi" src="assets/icons/round-shield.svg" alt=""> Броня' },
+    { k:'accessory',  n:'<img class="gi" src="assets/icons/diamond-ring.svg" alt=""> Украшения' },
+    { k:'consumable', n:'<img class="gi" src="assets/icons/round-bottom-flask.svg" alt=""> Зелья' },
+    { k:'sell',       n:'<img class="gi" src="assets/icons/two-coins.svg" alt=""> Продать' }
+  ];
+  $('shop-tabs').innerHTML = tabs.map(t =>
+    `<div class="shop-tab ${shopState.tab===t.k?'active':''}" onclick="shopState.tab='${t.k}';renderShop()">${t.n}</div>`
+  ).join('');
+  if (shopState.tab === 'sell') { renderSellGrid(); return; }
+  const items = shop.items.map(id => ITEMS[id]).filter(it => it.type === shopState.tab && (!it.cls || it.cls===P.cls));
+  if (!items.length) { $('shop-grid').innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#8b6f47;font-style:italic;padding:20px">здесь такого не продают</div>'; return; }
+  $('shop-grid').innerHTML = items.map(it => {
+    const id = Object.keys(ITEMS).find(k=>ITEMS[k]===it);
+    const canBuy = P.gold >= it.price;
+    let extra = '';
+    if (it.type==='weapon')   extra = `урон ${it.wdmg[0]}—${it.wdmg[1]}`;
+    else if (it.type==='consumable') extra = `в сумке: ${P.inv[id]||0}`;
+    else extra = describeInst({id, enchant:0});
+    return `<div class="shop-card">
+      <div class="ico">${it.ico}</div>
+      <div class="nm">${it.name}</div>
+      <div class="ds">${it.desc||''}<br><span style="color:#5fb3d4">${extra}</span></div>
+      <div class="price ${canBuy?'':'no'}">${it.price} <img class="gi" src="assets/icons/two-coins.svg" alt=""></div>
+      <button onclick="buy('${id}')" ${canBuy?'':'disabled'}>Купить</button>
+    </div>`;
+  }).join('');
+}
+const QUEST_SELL_PRICE = 8;
+function sellPriceConsumable(it) { return Math.max(1, Math.floor((it.price||QUEST_SELL_PRICE) * 0.5)); }
+function sellPriceQuest()        { return QUEST_SELL_PRICE; }
+function sellPriceInst(inst) {
+  const it = ITEMS[inst.id]; if (!it) return 0;
+  const base = it.price || 20;
+  const L = inst.enchant || 0;
+  return Math.max(1, Math.floor(base * 0.5 * (1 + 0.3*L)));
+}
+function renderSellGrid() {
+  const cards = [];
+  for (let i=0;i<P.equipInv.length;i++) {
+    const inst = P.equipInv[i]; const it = ITEMS[inst.id]; if (!it) continue;
+    const price = sellPriceInst(inst);
+    cards.push(`<div class="shop-card">
+      <div class="ico">${it.ico}</div>
+      <div class="nm">${it.name}${inst.enchant>0?` <span style="color:#f4d03f">+${inst.enchant}</span>`:''}</div>
+      <div class="ds"><span style="color:#8b6f47">в сумке</span><br><span style="color:#5fb3d4">${describeInst(inst)}</span></div>
+      <div class="price">${price} <img class="gi" src="assets/icons/two-coins.svg" alt=""></div>
+      <button onclick="sellEquip(${i})">Продать</button>
+    </div>`);
+  }
+  for (const k of Object.keys(P.inv)) {
+    const qty = P.inv[k]; if (!qty || !ITEMS[k]) continue;
+    const it = ITEMS[k];
+    if (it.type !== 'consumable' && it.type !== 'quest') continue;
+    const price = it.type==='consumable' ? sellPriceConsumable(it) : sellPriceQuest();
+    const qtyCtrl = qty > 1
+      ? `<span class="qty-wrap">
+           <input type="number" id="sellq-${k}" min="1" max="${qty}" value="1" style="width:44px;background:#1a0f08;border:1px solid #6b4423;color:#d4b87a;padding:2px 4px;font-family:inherit;font-size:12px">
+           <span class="qty-arrows">
+             <button type="button" onclick="qtyStep('sellq-${k}',1)">▲</button>
+             <button type="button" onclick="qtyStep('sellq-${k}',-1)">▼</button>
+           </span>
+         </span>`
+      : '';
+    const allBtn = qty > 1 ? `<button onclick="sellStack('${k}', ${qty})" style="margin-left:4px">Всё (${qty})</button>` : '';
+    cards.push(`<div class="shop-card">
+      <div class="ico">${it.ico}</div>
+      <div class="nm">${it.name}</div>
+      <div class="ds">${it.type==='quest'?'<span style="color:#8b6f47">материал</span>':(it.desc||'')}<br><span style="color:#5fb3d4">в сумке: ${qty}</span></div>
+      <div class="price">${price} <img class="gi" src="assets/icons/two-coins.svg" alt=""> / шт.</div>
+      <div style="display:flex;gap:4px;align-items:center;justify-content:center;flex-wrap:wrap">
+        ${qtyCtrl}
+        <button onclick="sellStack('${k}', ${qty>1?`(parseInt(document.getElementById('sellq-${k}').value)||1)`:1})">Продать</button>
+        ${allBtn}
+      </div>
+    </div>`);
+  }
+  $('shop-grid').innerHTML = cards.length ? cards.join('') : '<div style="grid-column:1/-1;text-align:center;color:#8b6f47;font-style:italic;padding:20px">продавать нечего</div>';
+}
+function sellEquip(idx) {
+  const inst = P.equipInv[idx]; if (!inst) return;
+  const it = ITEMS[inst.id]; if (!it) return;
+  const price = sellPriceInst(inst);
+  P.equipInv.splice(idx, 1);
+  P.gold += price;
+  log(`<span class="info"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Продано: ${it.ico} ${it.name}${inst.enchant>0?' +'+inst.enchant:''} за ${price}.</span>`);
+  renderShop(); render();
+}
+function sellStack(id, qty=1) {
+  const it = ITEMS[id]; if (!it || !P.inv[id]) return;
+  const have = P.inv[id];
+  const n = Math.max(1, Math.min(have, Math.floor(qty)||1));
+  const unit = it.type==='quest' ? sellPriceQuest() : sellPriceConsumable(it);
+  const total = unit * n;
+  P.inv[id] -= n;
+  if (P.inv[id] <= 0) delete P.inv[id];
+  P.gold += total;
+  log(`<span class="info"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Продано: ${it.ico} ${it.name} ×${n} за ${total}.</span>`);
+  renderShop(); render();
+}
+function buy(id) {
+  const it = ITEMS[id];
+  if (P.gold < it.price) { log(`<span class="bad">Не хватает золота на ${it.name}.</span>`); return; }
+  P.gold -= it.price;
+  if (it.type==='consumable') {
+    P.inv[id] = (P.inv[id]||0)+1;
+    log(`<span class="good"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено: ${it.ico} ${it.name}</span> <span class="gold">(-${it.price} <img class="gi" src="assets/icons/two-coins.svg" alt="">)</span>`);
+  } else {
+    const inst = { id, enchant: 0 };
+    const slot = it.slot==='artifact' ? (['art1','art2','art3'].find(s=>!P.equipped[s])||null) : it.slot;
+    if (slot && SLOTS.includes(slot) && !P.equipped[slot]) {
+      P.equipped[slot] = inst;
+      log(`<span class="good"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Приобретено и надето: ${it.ico} ${it.name}</span> <span class="gold">(-${it.price} <img class="gi" src="assets/icons/two-coins.svg" alt="">)</span>`);
+    } else {
+      P.equipInv.push(inst);
+      log(`<span class="good"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено: ${it.ico} ${it.name}</span> <span class="gold">(-${it.price} <img class="gi" src="assets/icons/two-coins.svg" alt="">)</span> <span class="sys">(в сумку)</span>`);
+    }
+  }
+  renderShop();
+  render();
+}
+
+function useItem(id) {
+  const it = ITEMS[id];
+  if (!P.inv[id]) return;
+  if (inCombat && it.combat) {
+    P.inv[id]--;
+    if (it.aoe) {
+      log(`<span class="good"><img class="gi" src="assets/icons/explosion-rays.svg" alt=""> ${it.name} взрывается среди врагов! (${it.dmg} урона каждому)</span>`);
+      const hits = Es.map(e => e && e.hp>0 ? it.dmg : 0);
+      applyMassDamage(hits);
+    } else if (it.useC) {
+      ensureTarget();
+      const r = it.useC(Es[target]);
+      log(`<span class="good">Используешь ${it.name}.</span> ${r}`);
+    }
+    finishPlayerTurn();
+    return;
+  }
+  if (!it.use) return;
+  P.inv[id]--;
+  const r = it.use(P);
+  log(`<span class="good">Используешь ${it.name}.</span> ${r}`);
+  if (inCombat) finishPlayerTurn(true);
+  render();
+}
+
+// ==================== БОЙ ====================
+const LOC_BOSS = {
+  ruins:'golem', crypt:'lich', mountains:'snowking', volcano:'phoenix', lair:'dragon', cave:'troll'
+};
+function scaleEnemy(e, stage) {
+  const hpM = 1 + (stage-1)*0.12;
+  const dM  = 1 + (stage-1)*0.08;
+  const xM  = 1 + (stage-1)*0.15;
+  const gM  = 1 + (stage-1)*0.12;
+  const hp = Math.max(1, Math.floor(e.hp*hpM));
+  return {
+    ...e,
+    hp, hpMax:hp,
+    dmg: [Math.max(1, Math.floor(e.dmg[0]*dM)), Math.max(2, Math.floor(e.dmg[1]*dM))],
+    xp: Math.max(1, Math.floor(e.xp*xM)),
+    gold: [Math.max(0, Math.floor(e.gold[0]*gM)), Math.max(1, Math.floor(e.gold[1]*gM))],
+    lvl: e.lvl + Math.floor((stage-1)/3)
+  };
+}
+function makeEliteBoss(src, stage) {
+  const s = scaleEnemy(src, stage);
+  const hp = Math.floor(s.hp*2.6);
+  return {
+    ...s,
+    id: src.id+'_elite_s'+stage,
+    name: 'Элитный '+src.name,
+    hp, hpMax:hp,
+    dmg: [Math.floor(s.dmg[0]*1.4), Math.floor(s.dmg[1]*1.4)],
+    xp: Math.floor(s.xp*3),
+    gold: [Math.floor(s.gold[0]*2.5), Math.floor(s.gold[1]*2.5)],
+    boss: true
+  };
+}
+
+function generateStageGroup(loc, s) {
+  const regs = ENEMIES.filter(e => !e.boss && e.loc.includes(loc));
+  if (!regs.length) return null;
+  let group;
+  const bossStage = s%10===0;
+  if (bossStage) {
+    const n = rnd(5,7);
+    group = [];
+    for (let i=0;i<n;i++) group.push(scaleEnemy(regs[rnd(0,regs.length-1)], s));
+    const bossId = LOC_BOSS[loc];
+    let boss;
+    if (bossId) {
+      const b = ENEMIES.find(e=>e.id===bossId);
+      boss = scaleEnemy(b, s);
+    } else {
+      boss = makeEliteBoss(regs[rnd(0,regs.length-1)], s);
+    }
+    group.push(boss);
+  } else {
+    const r = Math.random();
+    let count = r<0.45?1:(r<0.80?2:3);
+    group = [];
+    for (let i=0;i<count;i++) group.push(scaleEnemy(regs[rnd(0,regs.length-1)], s));
+  }
+  return { group, bossStage };
+}
+
+function hunt() {
+  const loc = P.location;
+  const s = P.stages[loc] || 1;
+  const gen = generateStageGroup(loc, s);
+  if (!gen) { log(`<span class="sys">Здесь сейчас никого нет. Попробуй другую локацию.</span>`); return; }
+  const { group, bossStage } = gen;
+
+  Es = group;
+  for (const e of Es) scheduleEnemy(e, true);
+  target = 0;
+  inCombat = true;
+  startCombatLoop();
+  hr();
+  log(`<span class="sys">— Этап ${s}${bossStage?' <img class="gi" src="assets/icons/star-formation.svg" alt=""> БОСС-АРЕНА':''} —</span>`);
+  if (bossStage) {
+    const boss = Es[Es.length-1];
+    log(`<span class="epic"><img class="gi" src="assets/icons/star-formation.svg" alt=""> ${boss.name} и его свита преграждают тебе путь!</span>`);
+  } else if (Es.length===1) {
+    log(`<span class="bad"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> ${Es[0].name} нападает!</span>`);
+  } else {
+    log(`<span class="bad"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> На тебя нападают: ${Es.map(e=>e.name).join(', ')}!</span>`);
+  }
+  render();
+}
+
+function attack() {
+  if (!inCombat) return;
+  ensureTarget();
+  const e = Es[target]; if (!e || e.hp<=0) return;
+  const wd = eff('wdmg');
+  const dmg = rnd(wd[0], wd[1]) + Math.floor(eff('str')/2);
+  const crit = Math.random() < (eff('crit')/100);
+  const final = crit ? Math.floor(dmg*1.7) : dmg;
+  log(crit
+    ? `<span class="epic"><img class="gi" src="assets/icons/star-formation.svg" alt=""> КРИТ! Ты бьёшь ${e.name} за ${final} урона!</span>`
+    : `<span class="good">Ты бьёшь ${e.name} за ${final} урона.</span>`);
+  if (crit) {
+    const hits = new Array(Es.length).fill(0);
+    hits[target] = final;
+    const others = aliveIdx().filter(i=>i!==target);
+    if (others.length) {
+      const j = others[rnd(0,others.length-1)];
+      const split = Math.floor(final*0.4);
+      hits[j] = split;
+      log(`<span class="good">Удар задевает ${Es[j].name} за ${split} урона.</span>`);
+    }
+    applyMassDamage(hits);
+  } else {
+    e.hp -= final;
+  }
+  finishPlayerTurn();
+}
+function defend() {
+  if (!inCombat) return;
+  P._defUntil = Date.now() + 2500;
+  log(`<span class="info">Ты поднимаешь щит (≈2.5 сек).</span>`);
+  finishPlayerTurn(true);
+}
+function spellMul(key) { return 1 + 0.2 * ((P.spellLvl && P.spellLvl[key]) || 0); }
+function cast(key) {
+  const s = SPELLS[key];
+  if (P.mp<s.cost || !inCombat) return;
+  if (!P.spellCd) P.spellCd = {};
+  if ((P.spellCd[key]||0) > Date.now()) return;
+  P.spellCd[key] = Date.now() + 30000;
+  P.mp -= s.cost;
+  const mul = spellMul(key);
+  if (s.heal) {
+    const h = Math.ceil((rnd(...s.heal) + eff('int')) * mul);
+    P.hp = Math.min(eff('hpMax'), P.hp+h);
+    log(`<span class="magic">${s.ico} ${s.name}: восстановлено ${h} HP.</span>`);
+  } else if (s.aoe==='all') {
+    const base = Math.ceil((rnd(...s.dmg) + eff('int')) * mul);
+    const dealt = Math.max(1, Math.floor(base*(s.mult||0.7)));
+    log(`<span class="magic">${s.ico} ${s.name} обрушивается на всех (${dealt} ед.)!</span>`);
+    const hits = Es.map(e => e && e.hp>0 ? dealt : 0);
+    applyMassDamage(hits);
+  } else if (s.aoe==='chain') {
+    ensureTarget();
+    const tgt = Es[target];
+    const base = Math.ceil((rnd(...s.dmg) + eff('int')) * mul);
+    log(`<span class="magic">${s.ico} ${s.name} наносит ${base} урона ${tgt.name}!</span>`);
+    const splash = Math.max(1, Math.floor(base*(s.chain||0.5)));
+    for (let i=0;i<Es.length;i++) {
+      if (i!==target && Es[i] && Es[i].hp>0) {
+        log(`<span class="magic">… отскок: ${splash} урона по ${Es[i].name}.</span>`);
+      }
+    }
+    const hits = Es.map((e,i) => {
+      if (!e || e.hp<=0) return 0;
+      return i===target ? base : splash;
+    });
+    applyMassDamage(hits);
+  } else {
+    ensureTarget();
+    const e = Es[target];
+    const d = Math.ceil((rnd(...s.dmg) + eff('int')) * mul);
+    e.hp -= d;
+    log(`<span class="magic">${s.ico} ${s.name} наносит ${d} урона ${e.name}!</span>`);
+  }
+  finishPlayerTurn();
+}
+function flee() {
+  if (Math.random() < 0.5 + eff('agi')*0.03) {
+    log(`<span class="info">Ты сбегаешь с поля боя.</span>`);
+    stopCombatLoop(); inCombat=false; Es=[]; target=0;
+    render();
+  } else {
+    log(`<span class="bad">Не получилось убежать!</span>`);
+    finishPlayerTurn(true);
+  }
+}
+
+function finishPlayerTurn(skipDeathCheck=false) {
+  for (let i=0;i<Es.length;i++) {
+    if (Es[i].hp<=0 && !Es[i]._dead) { Es[i]._dead = true; log(`<span class="good"><img class="gi" src="assets/icons/star-formation.svg" alt=""> ${Es[i].name} повержен!</span>`); }
+  }
+  if (!aliveIdx().length) { winFight(); return; }
+  ensureTarget();
+  render();
+  updateStageProgress();
+}
+
+function enemySpeed(e) {
+  const base = e.boss ? 3200 : 2700;
+  return base + rnd(-500, 800);
+}
+function scheduleEnemy(e, initial=false) {
+  e._next = Date.now() + (initial ? rnd(1400, 2600) : enemySpeed(e));
+}
+function startCombatLoop() {
+  stopCombatLoop();
+  lastRegen = Date.now();
+  combatTick = setInterval(combatTickFn, 200);
+}
+function stopCombatLoop() {
+  if (combatTick) { clearInterval(combatTick); combatTick = null; }
+}
+let cdTick = setInterval(() => {
+  if (!P || inCombat) return;
+  if (P.spellCd && Object.values(P.spellCd).some(t => t > Date.now())) renderSpells();
+}, 500);
+function combatTickFn() {
+  if (!inCombat) { stopCombatLoop(); return; }
+  const now = Date.now();
+  if (P.spellCd && Object.values(P.spellCd).some(t => t > now && t - now < 30200)) renderSpells();
+  let changed = false;
+  for (let i=0;i<Es.length;i++) {
+    const e = Es[i];
+    if (!e || e.hp<=0) continue;
+    if (now >= (e._next||0)) {
+      enemyAttack(e);
+      if (!inCombat) return;
+      scheduleEnemy(e);
+      changed = true;
+    }
+  }
+  const reg = eff('regen');
+  if (reg && P.hp>0 && now - lastRegen > 3000) {
+    P.hp = Math.min(eff('hpMax'), P.hp+reg);
+    lastRegen = now;
+    changed = true;
+  }
+  if (P._defUntil && now > P._defUntil) { P._defUntil = 0; changed = true; }
+  if (changed) { render(); updateStageProgress(); }
+}
+function enemyAttack(e) {
+  if (Math.random() < eff('agi')*0.012) {
+    log(`<span class="info">Ты уворачиваешься от удара ${e.name}!</span>`);
+    return;
+  }
+  let dmg = rnd(...e.dmg) - eff('armor');
+  if (P._defUntil && Date.now() < P._defUntil) dmg = Math.floor(dmg/2);
+  dmg = Math.max(1, dmg);
+  P.hp -= dmg;
+  log(`<span class="bad">${e.name} бьёт тебя на ${dmg} урона.</span>`);
+  if (P.hp<=0) { die(); }
+}
+
+function awardKillsLoot(enemies) {
+  let totalXp = 0, totalGold = 0;
+  for (const e of enemies) {
+    const g = rnd(...e.gold);
+    totalXp += e.xp; totalGold += g;
+    if (e.boss) P.killedBosses.push(e.id);
+    if (e.drops) {
+      for (const [item, chance] of Object.entries(e.drops)) {
+        if (Math.random() < chance) {
+          P.inv[item] = (P.inv[item]||0)+1;
+          log(`<span class="info">Найдено: ${ITEMS[item].ico} ${ITEMS[item].name}.</span>`);
+          onCollect(item);
+        }
+      }
+    }
+    if (e.resources) {
+      for (const [rid, range] of Object.entries(e.resources)) {
+        const n = rnd(range[0], range[1]);
+        if (n > 0) {
+          P.inv[rid] = (P.inv[rid]||0) + n;
+          log(`<span class="info"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Добыто: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${n}.</span>`);
+          onCollect(rid);
+        }
+      }
+    }
+    if (Math.random() < 0.18) {
+      const drop = Math.random()<0.7 ? 'potion_s' : 'mana_s';
+      P.inv[drop] = (P.inv[drop]||0)+1;
+      log(`<span class="info">Найдено: ${ITEMS[drop].name}.</span>`);
+    }
+    onKill(e);
+  }
+  P.xp += totalXp; P.gold += totalGold;
+  log(`<span class="good"><img class="gi" src="assets/icons/star-formation.svg" alt=""> Этап зачищен!</span> +${totalXp} XP, +${totalGold} <img class="gi" src="assets/icons/two-coins.svg" alt="">`);
+  while (P.xp >= P.xpNext) levelUp();
+}
+
+function applyMassDamage(hits) {
+  let pool = 0;
+  for (let i=0; i<Es.length; i++) {
+    const e = Es[i];
+    if (!e || e.hp<=0) continue;
+    const d = hits[i]||0;
+    if (d<=0) continue;
+    if (d >= e.hp) { pool += d - e.hp; e.hp = 0; }
+    else e.hp -= d;
+  }
+  if (!aliveIdx().length && pool > 0) cascadeOverflow(pool);
+}
+
+function cascadeOverflow(pool) {
+  log(`<span class="epic"><img class="gi" src="assets/icons/explosion-rays.svg" alt=""> Избыток урона (${pool}) прорывается на следующий этап!</span>`);
+  let safety = 20;
+  while (pool > 0 && safety-- > 0) {
+    if (!Es.length) break;
+    awardKillsLoot(Es);
+    const loc = P.location;
+    P.stages[loc] = (P.stages[loc]||1) + 1;
+    const s = P.stages[loc];
+    const gen = generateStageGroup(loc, s);
+    if (!gen) { log(`<span class="sys">Дальше этапов нет — урон иссякает.</span>`); Es = []; break; }
+    Es = gen.group;
+    for (const e of Es) scheduleEnemy(e, true);
+    target = 0;
+    log(`<span class="sys">— Этап ${s}${gen.bossStage?' <img class="gi" src="assets/icons/star-formation.svg" alt=""> БОСС-АРЕНА':''} (прорыв!) —</span>`);
+    for (const e of Es) {
+      if (pool <= 0) break;
+      if (pool >= e.hp) { pool -= e.hp; e.hp = 0; }
+      else { e.hp -= pool; pool = 0; }
+    }
+    if (aliveIdx().length) {
+      log(`<span class="bad">Сквозной урон иссяк. Выжившие бросаются в бой!</span>`);
+      break;
+    }
+  }
+}
+
+function winFight() {
+  awardKillsLoot(Es);
+  const loc = P.location;
+  P.stages[loc] = (P.stages[loc]||1) + 1;
+  log(`<span class="info">→ ${LOCATIONS[loc].name}: переход на этап ${P.stages[loc]}.</span>`);
+  stopCombatLoop(); inCombat=false; Es=[]; target=0;
+  render();
+}
+function levelUp() {
+  P.xp -= P.xpNext;
+  P.lvl++; P.xpNext = Math.floor(P.xpNext*1.55);
+  P.hpMax += 14; P.mpMax += 7;
+  P.hp = eff('hpMax'); P.mp = eff('mpMax');
+  P.str++; P.agi++; P.int++;
+  P.skillPts = (P.skillPts||0) + 1;
+  hr();
+  log(`<span class="epic"><img class="gi" src="assets/icons/star-formation.svg" alt=""><img class="gi" src="assets/icons/star-formation.svg" alt=""><img class="gi" src="assets/icons/star-formation.svg" alt=""> УРОВЕНЬ ${P.lvl}! <img class="gi" src="assets/icons/star-formation.svg" alt=""><img class="gi" src="assets/icons/star-formation.svg" alt=""><img class="gi" src="assets/icons/star-formation.svg" alt=""></span> HP/MP полные, статы выросли, +1 очко умений.`);
+}
+function victory() {
+  hr();
+  log(`<span class="epic"><img class="gi" src="assets/icons/star-formation.svg" alt=""><img class="gi" src="assets/icons/star-formation.svg" alt=""><img class="gi" src="assets/icons/star-formation.svg" alt=""> ДРЕВНИЙ ДРАКОН ПОВЕРЖЕН! <img class="gi" src="assets/icons/star-formation.svg" alt=""><img class="gi" src="assets/icons/star-formation.svg" alt=""><img class="gi" src="assets/icons/star-formation.svg" alt=""></span>`);
+  log(`<span class="epic">Имя ${P.name} навеки вписано в летописи Сумрачных Земель.</span>`);
+  log(`<span class="sys">— КОНЕЦ ИГРЫ. Можешь продолжить охоту, но главное приключение завершено. —</span>`);
+  stopCombatLoop(); inCombat=false; Es=[]; target=0;
+}
+document.addEventListener('keydown', e => {
+  if (!inCombat || !P) return;
+  const tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || e.ctrlKey || e.altKey || e.metaKey) return;
+  const n = parseInt(e.key, 10);
+  if (!(n >= 1 && n <= 5)) return;
+  const key = P.spells[n-1];
+  if (!key) return;
+  e.preventDefault();
+  cast(key);
+});
+function die() {
+  hr();
+  const loc = P.location;
+  const oldStage = P.stages[loc]||1;
+  const newStage = Math.max(1, oldStage-3);
+  P.stages[loc] = newStage;
+  const xpLoss = Math.floor(P.xp*0.1);
+  const goldLoss = Math.floor(P.gold*0.15);
+  P.xp = Math.max(0, P.xp-xpLoss);
+  P.gold = Math.max(0, P.gold-goldLoss);
+  P.hp = Math.floor(eff('hpMax')/2);
+  P.mp = Math.floor(eff('mpMax')/2);
+  log(`<span class="bad"><img class="gi" src="assets/icons/death-skull.svg" alt=""> Ты пал в бою...</span>`);
+  log(`<span class="sys">Духи возвращают тебя на этап ${newStage} (было ${oldStage}). Потеря: -${xpLoss} XP, -${goldLoss} <img class="gi" src="assets/icons/two-coins.svg" alt="">.</span>`);
+  stopCombatLoop(); inCombat=false; Es=[]; target=0;
+  render();
+}
+</script>
+</body>
+</html>
