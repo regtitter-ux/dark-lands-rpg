@@ -60,14 +60,34 @@
   .stat-row span:last-child { color: #f4d03f; font-weight: bold; }
   .stat-row .bonus { color: #6abe30; font-size: 11px; margin-left: 4px; }
 
-  .bar { position: relative; height: 16px; background: #1a0e08; border: 1px solid #6b4423; margin: 4px 0; overflow: hidden; }
+  .bar-row { display: flex; align-items: center; gap: 6px; margin: 5px 0; }
+  .bar-row .bar-ico {
+    flex-shrink: 0; width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid #6b4423;
+    background: radial-gradient(circle at 30% 30%, #3a2010, #1a0e08);
+    box-shadow: inset 0 0 4px rgba(0,0,0,0.8), 0 0 2px rgba(244,208,63,0.15);
+  }
+  .bar-row .bar-ico img { width: 14px; height: 14px; }
+  .bar-row.hp .bar-ico img { filter: brightness(0) saturate(100%) invert(45%) sepia(82%) saturate(3000%) hue-rotate(340deg) brightness(90%) contrast(95%); }
+  .bar-row.mp .bar-ico img { filter: brightness(0) saturate(100%) invert(68%) sepia(30%) saturate(800%) hue-rotate(165deg) brightness(95%) contrast(90%); }
+  .bar-row.xp .bar-ico img { filter: brightness(0) saturate(100%) invert(85%) sepia(50%) saturate(600%) hue-rotate(5deg) brightness(100%) contrast(95%); }
+  .bar { position: relative; flex: 1; height: 20px; background: #0a0503; border: 1px solid #6b4423; overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.9), inset 0 -1px 0 rgba(107,68,35,0.3); }
   .bar .ghost { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: #f4d03f; opacity: 0.55; transition: width 0.55s ease-out 0.25s; z-index: 0; }
-  .bar .fill { position: relative; height: 100%; transition: width 0.12s linear; z-index: 1; }
-  .bar .label { position: absolute; inset: 0; text-align: center; font-size: 11px; line-height: 16px; color: #e8d8b8; text-shadow: 1px 1px 0 #000, 0 0 2px #000; font-weight: normal; z-index: 2; }
-  .bar.hp .fill { background: linear-gradient(90deg, #8b0000, #d12626); }
+  .bar .fill { position: relative; height: 100%; transition: width 0.12s linear; z-index: 1; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -2px 3px rgba(0,0,0,0.4); }
+  .bar .fill::after {
+    content: ''; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.25), rgba(255,255,255,0));
+    pointer-events: none;
+  }
+  .bar .label { position: absolute; inset: 0; text-align: center; font-size: 11px; line-height: 20px; color: #f4e4b8; text-shadow: 1px 1px 0 #000, 0 0 3px #000; font-weight: bold; letter-spacing: 0.5px; z-index: 2; }
+  .bar.hp .fill { background: linear-gradient(180deg, #e84040 0%, #c02020 50%, #7a1010 100%); }
   .bar.hp .ghost { background: #f4e06a; }
-  .bar.mp .fill { background: linear-gradient(90deg, #1a3a8b, #3a6dd1); }
-  .bar.xp .fill { background: linear-gradient(90deg, #5a3a00, #f4d03f); }
+  .bar.hp .bar-ico { border-color: #8b3020; }
+  .bar.mp .fill { background: linear-gradient(180deg, #5a9de8 0%, #2a5fbb 50%, #152f6a 100%); }
+  .bar.mp .bar-ico { border-color: #3a6dd1; }
+  .bar.xp .fill { background: linear-gradient(180deg, #ffe060 0%, #d4a020 50%, #6b4423 100%); }
+  .bar.xp .bar-ico { border-color: #8b6f47; }
 
   .log { flex: 1; min-height: 120px; overflow-y: auto; border: 2px inset #4a2818; background: #0a0503; padding: 10px; font-size: 13px; line-height: 1.6; }
   .log p { margin-bottom: 4px; }
@@ -400,9 +420,9 @@
         <h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Герой <span class="hero-meta-inline" id="hero-meta"></span></h3>
         <div class="body">
           <div id="equip-body"></div>
-          <div class="bar hp"><div class="ghost" id="hp-ghost"></div><div class="fill" id="hp-fill"></div><div class="label" id="hp-lbl">100/100</div></div>
-          <div class="bar mp"><div class="ghost" id="mp-ghost"></div><div class="fill" id="mp-fill"></div><div class="label" id="mp-lbl">50/50</div></div>
-          <div class="bar xp"><div class="fill" id="xp-fill"></div><div class="label" id="xp-lbl">0/100</div></div>
+          <div class="bar-row hp"><div class="bar-ico"><img src="assets/icons/hearts.svg" alt="HP"></div><div class="bar hp"><div class="ghost" id="hp-ghost"></div><div class="fill" id="hp-fill"></div><div class="label" id="hp-lbl">100/100</div></div></div>
+          <div class="bar-row mp"><div class="bar-ico"><img src="assets/icons/round-bottom-flask.svg" alt="MP"></div><div class="bar mp"><div class="ghost" id="mp-ghost"></div><div class="fill" id="mp-fill"></div><div class="label" id="mp-lbl">50/50</div></div></div>
+          <div class="bar-row xp"><div class="bar-ico"><img src="assets/icons/star-formation.svg" alt="XP"></div><div class="bar xp"><div class="fill" id="xp-fill"></div><div class="label" id="xp-lbl">0/100</div></div></div>
         </div>
       </div>
       <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Характеристики</h3><div class="body" id="stats-body"></div></div>
@@ -430,7 +450,7 @@
       <div class="tabs">
         <div class="tab active" data-tab="inv">Сумка</div>
         <div class="tab" data-tab="map">Карта</div>
-        <div class="tab" data-tab="quest">Свиток <span class="badge" id="quest-badge" style="display:none">0</span></div>
+        <div class="tab" data-tab="quest">Квесты <span class="badge" id="quest-badge" style="display:none">0</span></div>
         <div class="tab" data-tab="leaders">Рейтинг</div>
       </div>
       <div id="tab-inv">
@@ -477,10 +497,6 @@
 
 <div class="modal-bg" id="slot-modal" onclick="if(event.target===this)closeSlotModal()">
   <div class="modal" style="max-width:500px" id="slot-modal-inner"></div>
-</div>
-
-<div class="modal-bg" id="trade-modal" onclick="if(event.target===this)closeTrader()">
-  <div class="modal" style="max-width:820px" id="trade-modal-inner"></div>
 </div>
 
 <div class="modal-bg" id="shop-modal" onclick="if(event.target===this)closeShop()">
@@ -717,29 +733,17 @@ function noteSeen(locId) {
     P.market.seen[locId][rid] = { price: marketPrice(locId, rid), at: now };
   }
 }
-let traderTickInterval = null;
-function openTrader() {
-  ensureMarket();
-  noteSeen(P.location);
-  renderTrader();
-  $('trade-modal').classList.add('show');
-  if (traderTickInterval) clearInterval(traderTickInterval);
-  traderTickInterval = setInterval(() => {
-    if (!document.getElementById('trade-modal').classList.contains('show')) { clearInterval(traderTickInterval); traderTickInterval=null; return; }
-    if (Date.now() >= (P.market.nextAt||0)) { regenMarket(); noteSeen(P.location); renderTrader(); return; }
-    const el = document.getElementById('trader-timer');
-    if (el) el.textContent = formatTimer(P.market.nextAt - Date.now());
-  }, 500);
-}
-function closeTrader(){ $('trade-modal').classList.remove('show'); if (traderTickInterval){clearInterval(traderTickInterval);traderTickInterval=null;} }
 function formatTimer(ms) {
   const s = Math.max(0, Math.ceil(ms/1000));
   const m = Math.floor(s/60), r = s%60;
   return `${m}:${String(r).padStart(2,'0')}`;
 }
-function renderTrader() {
+function renderResourceGrid() {
+  ensureMarket();
+  noteSeen(P.location);
   const locId = P.location;
-  const tr = TRADERS[locId]; if (!tr) return;
+  const tr = TRADERS[locId];
+  if (!tr) { $('shop-grid').innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#8b6f47;font-style:italic;padding:20px">здесь не торгуют ресурсами</div>'; return; }
   const loc = LOCATIONS[locId];
   const prices = P.market.prices[locId];
   const rows = RESOURCE_IDS.map(rid => {
@@ -801,43 +805,43 @@ function renderTrader() {
     return `<tr><td style="padding:3px 6px;color:#8b6f47;font-size:11px">${trName}</td>${cells}</tr>`;
   }).join('');
   const headerCells = RESOURCE_IDS.map(rid => `<th style="padding:3px 4px;text-align:center;font-weight:normal;color:#8b6f47" title="${ITEMS[rid].name}">${ITEMS[rid].ico}</th>`).join('');
-  $('trade-modal-inner').innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px">
-      <div>
-        <h2 style="margin:0;font-size:18px;text-align:left">${loc.ico} ${tr.name}</h2>
-        <div style="color:#8b6f47;font-size:11px;font-style:italic">${loc.name} — ${tr.desc}</div>
+  $('shop-grid').innerHTML = `
+    <div style="grid-column:1/-1">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px">
+        <div>
+          <h3 style="margin:0;font-size:15px;color:#f4d03f;font-family:'MedievalSharp',cursive">${loc.ico} ${tr.name}</h3>
+          <div style="color:#8b6f47;font-size:11px;font-style:italic">${tr.desc}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="color:#5fb3d4;font-size:11px">до обновления цен: <b id="trader-timer">${formatTimer(P.market.nextAt - Date.now())}</b></div>
+        </div>
       </div>
-      <div style="text-align:right">
-        <div style="color:#f4d03f;font-size:13px">Золото: <b>${P.gold}</b> <img class="gi" src="assets/icons/two-coins.svg" alt=""></div>
-        <div style="color:#5fb3d4;font-size:11px">до обновления цен: <b id="trader-timer">${formatTimer(P.market.nextAt - Date.now())}</b></div>
+      <div style="margin:8px 0;padding:6px;background:rgba(0,0,0,0.35);border:1px solid #4a2818">
+        <div style="color:#f4d03f;font-size:12px;margin-bottom:4px">Слухи с рынков:</div>
+        ${newsHtml}
       </div>
+      <table style="width:100%;border-collapse:collapse;color:#d4b87a;font-size:12px;margin-top:4px">
+        <thead><tr style="border-bottom:1px solid #4a2818;color:#8b6f47;font-size:11px">
+          <th style="text-align:left;padding:4px">Ресурс</th>
+          <th style="text-align:center;padding:4px">У тебя</th>
+          <th style="text-align:center;padding:4px" title="Запас у торговца — пополняется только продажами игрока">У торговца</th>
+          <th style="text-align:right;padding:4px">Цена</th>
+          <th style="text-align:center;padding:4px">×</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${compareRows ? `
+        <details style="margin-top:10px" ${P.market.compareOpen?'open':''}>
+          <summary style="cursor:pointer;color:#5fb3d4;font-size:12px" onclick="setTimeout(()=>{P.market.compareOpen=this.parentElement.open;},0)">Цены в памяти (по другим торговцам)</summary>
+          <table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:11px">
+            <thead><tr style="color:#8b6f47"><th style="text-align:left;padding:3px 6px">Торговец</th>${headerCells}</tr></thead>
+            <tbody>${compareRows}</tbody>
+          </table>
+          <div style="color:#5a3820;font-size:10px;margin-top:4px">Зелёным — дороже, чем здесь (выгодно продать там), красным — дешевле (выгодно купить там). Навести мышь — когда видел.</div>
+        </details>
+      ` : ''}
     </div>
-    <div style="margin:8px 0;padding:6px;background:rgba(0,0,0,0.35);border:1px solid #4a2818">
-      <div style="color:#f4d03f;font-size:12px;margin-bottom:4px">Слухи с рынков:</div>
-      ${newsHtml}
-    </div>
-    <table style="width:100%;border-collapse:collapse;color:#d4b87a;font-size:12px;margin-top:4px">
-      <thead><tr style="border-bottom:1px solid #4a2818;color:#8b6f47;font-size:11px">
-        <th style="text-align:left;padding:4px">Ресурс</th>
-        <th style="text-align:center;padding:4px">У тебя</th>
-        <th style="text-align:center;padding:4px" title="Запас у торговца — пополняется только продажами игрока">У торговца</th>
-        <th style="text-align:right;padding:4px">Цена</th>
-        <th style="text-align:center;padding:4px">×</th>
-        <th></th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    ${compareRows ? `
-      <details style="margin-top:10px" ${P.market.compareOpen?'open':''}>
-        <summary style="cursor:pointer;color:#5fb3d4;font-size:12px" onclick="setTimeout(()=>{P.market.compareOpen=this.parentElement.open;},0)">Цены в памяти (по другим торговцам)</summary>
-        <table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:11px">
-          <thead><tr style="color:#8b6f47"><th style="text-align:left;padding:3px 6px">Торговец</th>${headerCells}</tr></thead>
-          <tbody>${compareRows}</tbody>
-        </table>
-        <div style="color:#5a3820;font-size:10px;margin-top:4px">Зелёным — дороже, чем здесь (выгодно продать там), красным — дешевле (выгодно купить там). Навести мышь — когда видел.</div>
-      </details>
-    ` : ''}
-    <div style="margin-top:14px;text-align:right"><button class="act" onclick="closeTrader()">Уйти</button></div>
   `;
 }
 function tradeBuy(rid) {
@@ -853,7 +857,7 @@ function tradeBuy(rid) {
   P.inv[rid] = (P.inv[rid]||0) + n;
   P.market.stock[P.location][rid] -= n;
   log(`<span class="good"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено у ${TRADERS[P.location].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${n} за ${total}.</span>`);
-  renderTrader(); render();
+  renderResourceGrid(); render();
 }
 function qtyStep(id, delta) {
   const el = document.getElementById(id); if (!el) return;
@@ -872,7 +876,7 @@ function tradeBuyMax(rid) {
   P.inv[rid] = (P.inv[rid]||0) + n;
   P.market.stock[P.location][rid] -= n;
   log(`<span class="good"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено у ${TRADERS[P.location].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${n} за ${total}.</span>`);
-  renderTrader(); render();
+  renderResourceGrid(); render();
 }
 function tradeSellAll(rid) {
   const have = P.inv[rid] || 0; if (!have) return;
@@ -883,7 +887,7 @@ function tradeSellAll(rid) {
   ensureStock();
   P.market.stock[P.location][rid] = (P.market.stock[P.location][rid]||0) + have;
   log(`<span class="info"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Продано ${TRADERS[P.location].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${have} за ${total} (весь стак).</span>`);
-  renderTrader(); render();
+  renderResourceGrid(); render();
 }
 function tradeSell(rid) {
   const have = P.inv[rid] || 0; if (!have) return;
@@ -897,7 +901,7 @@ function tradeSell(rid) {
   ensureStock();
   P.market.stock[P.location][rid] = (P.market.stock[P.location][rid]||0) + n;
   log(`<span class="info"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Продано ${TRADERS[P.location].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${n} за ${total}.</span>`);
-  renderTrader(); render();
+  renderResourceGrid(); render();
 }
 
 // ==================== ВРАГИ ====================
@@ -935,15 +939,15 @@ const ENEMIES = [
 // ==================== ЛОКАЦИИ ====================
 const LOCATIONS = {
   village:   { name:'Деревня Тихий Дол',   ico:'<img class="gi" src="assets/icons/village.svg" alt="">', desc:'Уютные дома, дым из труб, торговцы и трактирщик.', actions:['hunt','shop','inn','travel'], shop:'village' },
-  forest:    { name:'Сумрачный Лес',       ico:'<img class="gi" src="assets/icons/pine-tree.svg" alt="">', desc:'Старые сосны шепчут на ветру. Тропа петляет среди корней.', actions:['hunt','rest','travel'] },
-  swamp:     { name:'Гнилые Топи',         ico:'<img class="gi" src="assets/icons/withered-tree.svg" alt="">', desc:'Густой туман, запах тлена и тёмная вода под ногами.', actions:['hunt','rest','travel'] },
-  cave:      { name:'Пещеры Ульдара',      ico:'<img class="gi" src="assets/icons/hole.svg" alt="">', desc:'Влажные стены, эхо капель и чьи-то рычания во тьме.', actions:['hunt','travel'] },
-  crypt:     { name:'Древняя Крипта',      ico:'<img class="gi" src="assets/icons/coffin.svg" alt="">', desc:'Холод пробирает до костей. Здесь покоятся мёртвые — или нет.', actions:['hunt','travel'] },
-  ruins:     { name:'Развалины Альдора',   ico:'<img class="gi" src="assets/icons/greek-temple.svg" alt="">', desc:'Обломки забытого города. Эхо древних шагов.', actions:['hunt','travel'] },
+  forest:    { name:'Сумрачный Лес',       ico:'<img class="gi" src="assets/icons/pine-tree.svg" alt="">', desc:'Старые сосны шепчут на ветру. Тропа петляет среди корней.', actions:['hunt','rest','shop','travel'] },
+  swamp:     { name:'Гнилые Топи',         ico:'<img class="gi" src="assets/icons/withered-tree.svg" alt="">', desc:'Густой туман, запах тлена и тёмная вода под ногами.', actions:['hunt','rest','shop','travel'] },
+  cave:      { name:'Пещеры Ульдара',      ico:'<img class="gi" src="assets/icons/hole.svg" alt="">', desc:'Влажные стены, эхо капель и чьи-то рычания во тьме.', actions:['hunt','shop','travel'] },
+  crypt:     { name:'Древняя Крипта',      ico:'<img class="gi" src="assets/icons/coffin.svg" alt="">', desc:'Холод пробирает до костей. Здесь покоятся мёртвые — или нет.', actions:['hunt','shop','travel'] },
+  ruins:     { name:'Развалины Альдора',   ico:'<img class="gi" src="assets/icons/greek-temple.svg" alt="">', desc:'Обломки забытого города. Эхо древних шагов.', actions:['hunt','shop','travel'] },
   port:      { name:'Порт Бурехвост',      ico:'<img class="gi" src="assets/icons/anchor.svg" alt="">', desc:'Соль на ветру, крики чаек и звон монет в трактирах.', actions:['hunt','shop','inn','travel'], shop:'port' },
-  mountains: { name:'Ледяные Пики',        ico:'<img class="gi" src="assets/icons/mountains.svg" alt="">', desc:'Снежные вершины, ветер режет лицо. Тут водятся твари.', actions:['hunt','rest','travel'] },
-  volcano:   { name:'Огненный Хребет',     ico:'<img class="gi" src="assets/icons/volcano.svg" alt="">', desc:'Раскалённые камни, потоки лавы. Воздух дрожит от жара.', actions:['hunt','travel'] },
-  lair:      { name:'Логово Дракона',      ico:'<img class="gi" src="assets/icons/dragon-spiral.svg" alt="">', desc:'Логово древнего ужаса. Здесь твой последний бой.', actions:['hunt','travel'] }
+  mountains: { name:'Ледяные Пики',        ico:'<img class="gi" src="assets/icons/mountains.svg" alt="">', desc:'Снежные вершины, ветер режет лицо. Тут водятся твари.', actions:['hunt','rest','shop','travel'] },
+  volcano:   { name:'Огненный Хребет',     ico:'<img class="gi" src="assets/icons/volcano.svg" alt="">', desc:'Раскалённые камни, потоки лавы. Воздух дрожит от жара.', actions:['hunt','shop','travel'] },
+  lair:      { name:'Логово Дракона',      ico:'<img class="gi" src="assets/icons/dragon-spiral.svg" alt="">', desc:'Логово древнего ужаса. Здесь твой последний бой.', actions:['hunt','shop','travel'] }
 };
 
 // ==================== МАГАЗИНЫ ====================
@@ -1503,7 +1507,7 @@ function startGame(name, cls) {
   $('start-modal').classList.remove('show');
   hr();
   log(`<span class="epic"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> ${name} (${c.name}) вступает в Сумрачные Земли! <img class="gi" src="assets/icons/crossed-swords.svg" alt=""></span>`);
-  log(`<span class="sys">Загляни в Свиток (вкладка справа) — там ждут задания.</span>`);
+  log(`<span class="sys">Загляни во вкладку «Квесты» (справа) — там ждут задания.</span>`);
   render();
 }
 
@@ -1942,7 +1946,6 @@ function renderActions() {
   if (loc.actions.includes('rest')) btns.push(`<button class="act" onclick="rest()"><img class="gi" src="assets/icons/sleepy.svg" alt=""> Отдохнуть</button>`);
   if (loc.actions.includes('shop')) btns.push(`<button class="act" onclick="openShop()"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Лавка</button>`);
   if (loc.actions.includes('inn'))  btns.push(`<button class="act" onclick="inn()"><img class="gi" src="assets/icons/beer-stein.svg" alt=""> Трактир</button>`);
-  btns.splice(3, 0, `<button class="act" onclick="openTrader()"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Торговец ресурсов</button>`);
   el.innerHTML = btns.join('');
 }
 
@@ -2098,30 +2101,53 @@ function inn() {
 
 // ==================== МАГАЗИН ====================
 let shopState = { tab:'weapon' };
+let shopTraderTicker = null;
 function openShop() {
   const sid = LOCATIONS[P.location].shop;
-  if (!sid) return;
-  shopState.tab = 'weapon';
+  shopState.tab = sid ? 'weapon' : 'resources';
   $('shop-modal').classList.add('show');
+  ensureMarket();
   renderShop();
+  if (shopTraderTicker) clearInterval(shopTraderTicker);
+  shopTraderTicker = setInterval(() => {
+    if (!$('shop-modal').classList.contains('show')) { clearInterval(shopTraderTicker); shopTraderTicker=null; return; }
+    if (shopState.tab !== 'resources') return;
+    if (Date.now() >= (P.market.nextAt||0)) { regenMarket(); noteSeen(P.location); renderShop(); return; }
+    const el = document.getElementById('trader-timer');
+    if (el) el.textContent = formatTimer(P.market.nextAt - Date.now());
+  }, 500);
 }
-function closeShop() { $('shop-modal').classList.remove('show'); }
+function closeShop() {
+  $('shop-modal').classList.remove('show');
+  if (shopTraderTicker) { clearInterval(shopTraderTicker); shopTraderTicker=null; }
+}
 function renderShop() {
   const sid = LOCATIONS[P.location].shop;
-  const shop = SHOPS[sid];
-  $('shop-name').innerHTML = shop.name;
+  const shop = sid ? SHOPS[sid] : null;
+  const tr = TRADERS[P.location];
+  const loc = LOCATIONS[P.location];
+  $('shop-name').innerHTML = shop
+    ? shop.name
+    : `<img class="gi" src="assets/icons/two-coins.svg" alt=""> ${tr ? tr.name : 'Торговец'}`;
   $('shop-gold').textContent = P.gold;
-  const tabs = [
-    { k:'weapon',     n:'<img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Оружие' },
-    { k:'armor',      n:'<img class="gi" src="assets/icons/round-shield.svg" alt=""> Броня' },
-    { k:'accessory',  n:'<img class="gi" src="assets/icons/diamond-ring.svg" alt=""> Украшения' },
-    { k:'consumable', n:'<img class="gi" src="assets/icons/round-bottom-flask.svg" alt=""> Зелья' },
-    { k:'sell',       n:'<img class="gi" src="assets/icons/two-coins.svg" alt=""> Продать' }
-  ];
+  const tabs = [];
+  if (shop) {
+    tabs.push(
+      { k:'weapon',     n:'<img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Оружие' },
+      { k:'armor',      n:'<img class="gi" src="assets/icons/round-shield.svg" alt=""> Броня' },
+      { k:'accessory',  n:'<img class="gi" src="assets/icons/diamond-ring.svg" alt=""> Украшения' },
+      { k:'consumable', n:'<img class="gi" src="assets/icons/round-bottom-flask.svg" alt=""> Зелья' },
+    );
+  }
+  if (tr) tabs.push({ k:'resources', n:'<img class="gi" src="assets/icons/two-coins.svg" alt=""> Ресурсы' });
+  if (shop) tabs.push({ k:'sell', n:'<img class="gi" src="assets/icons/two-coins.svg" alt=""> Продать' });
+  if (!tabs.find(t => t.k === shopState.tab)) shopState.tab = tabs[0]?.k || 'resources';
   $('shop-tabs').innerHTML = tabs.map(t =>
     `<div class="shop-tab ${shopState.tab===t.k?'active':''}" onclick="shopState.tab='${t.k}';renderShop()">${t.n}</div>`
   ).join('');
+  if (shopState.tab === 'resources') { renderResourceGrid(); return; }
   if (shopState.tab === 'sell') { renderSellGrid(); return; }
+  if (!shop) { $('shop-grid').innerHTML = ''; return; }
   const items = shop.items.map(id => ITEMS[id]).filter(it => it.type === shopState.tab && (!it.cls || it.cls===P.cls));
   if (!items.length) { $('shop-grid').innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#8b6f47;font-style:italic;padding:20px">здесь такого не продают</div>'; return; }
   $('shop-grid').innerHTML = items.map(it => {
