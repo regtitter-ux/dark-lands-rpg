@@ -357,7 +357,7 @@ const FEED_KILL = [
 ];
 function pickTpl(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
-const FEED_DEDUP_MS = 60000;
+const FEED_DEDUP_MS = 300000;
 const feedLastEmit = new Map(); // key = `${kind}:${uid}` -> timestamp
 function feedThrottle(kind, uid) {
   const k = `${kind}:${uid}`;
@@ -370,10 +370,8 @@ function feedThrottle(kind, uid) {
 
 // ==================== PVP ARENA (server-authoritative real-time) ====================
 const arena = new Map(); // userId -> combat state
-const ARENA_TIMEOUT_MS = 15000;
+const ARENA_TIMEOUT_MS = 60000;
 const ATTACK_CD_MS = 1200;
-const DEFEND_DUR_MS = 1500;
-const DEFEND_CD_MS = 3000;
 const REGEN_TICK_MS = 2500;
 const CORPSE_LINGER_MS = 4000;
 const SPELL_CD_MS = 30000;
