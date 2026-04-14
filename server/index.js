@@ -357,6 +357,17 @@ const FEED_KILL = [
 ];
 function pickTpl(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
+const FEED_DEDUP_MS = 60000;
+const feedLastEmit = new Map(); // key = `${kind}:${uid}` -> timestamp
+function feedThrottle(kind, uid) {
+  const k = `${kind}:${uid}`;
+  const now = Date.now();
+  const last = feedLastEmit.get(k) || 0;
+  if (now - last < FEED_DEDUP_MS) return false;
+  feedLastEmit.set(k, now);
+  return true;
+}
+
 // ==================== PVP ARENA (server-authoritative real-time) ====================
 const arena = new Map(); // userId -> combat state
 const ARENA_TIMEOUT_MS = 15000;
@@ -372,7 +383,7 @@ function arenaPrune() {
     if (p.dead && now - p.deathAt > CORPSE_LINGER_MS) { arena.delete(id); continue; }
     if (!p.dead && now - p.lastSeen > ARENA_TIMEOUT_MS) {
       arena.delete(id);
-      emitFeed(pickTpl(FEED_LEAVE)(p.username), id);
+      if (feedThrottle('leave', id)) emitFeed(pickTpl(FEED_LEAVE)(p.username), id);
     }
   }
 }
@@ -446,7 +457,7 @@ app.post('/api/arena/enter', auth, async (req, res) => {
       dead: false, killedBy: null, deathAt: 0,
       pvp_kills: base.pvp_kills|0,
     });
-    if (!wasPresent) emitFeed(pickTpl(FEED_ENTER)(base.username), req.user.uid);
+    if (!wasPresent && feedThrottle('enter', req.user.uid)) emitFeed(pickTpl(FEED_ENTER)(base.username), req.user.uid);
     res.json({ ok: true });
   } catch (e) {
     console.error(e); res.status(500).json({ error: 'db error' });
@@ -457,7 +468,7 @@ app.post('/api/arena/leave', auth, (req, res) => {
   const p = arena.get(req.user.uid);
   if (p) {
     arena.delete(req.user.uid);
-    if (!p.dead) emitFeed(pickTpl(FEED_LEAVE)(p.username), req.user.uid);
+    if (!p.dead && feedThrottle('leave', req.user.uid)) emitFeed(pickTpl(FEED_LEAVE)(p.username), req.user.uid);
   }
   res.json({ ok: true });
 });
@@ -470,7 +481,7 @@ app.post('/api/arena/leave-beacon', (req, res) => {
       const p = arena.get(u.uid);
       if (p) {
         arena.delete(u.uid);
-        if (!p.dead) emitFeed(pickTpl(FEED_LEAVE)(p.username), u.uid);
+        if (!p.dead && feedThrottle('leave', u.uid)) emitFeed(pickTpl(FEED_LEAVE)(p.username), u.uid);
       }
     } catch {}
   }
@@ -536,7 +547,7 @@ app.post('/api/arena/action', auth, async (req, res) => {
 
   if (type === 'leave') {
     arena.delete(me);
-    emitFeed(pickTpl(FEED_LEAVE)(self.username), me);
+    if (feedThrottle('leave', me)) emitFeed(pickTpl(FEED_LEAVE)(self.username), me);
     return res.json({ ok: true, left: true });
   }
   if (type === 'defend') {
