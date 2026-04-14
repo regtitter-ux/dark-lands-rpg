@@ -72,6 +72,18 @@ async function initDb() {
       JWT_SECRET = r2.rows[0].value;
     }
   }
+  // one-time test-data wipe — runs once, flag prevents reruns
+  const wipeKey = 'wipe_testdata_2026_04_14';
+  const w = await pool.query(`SELECT value FROM app_meta WHERE key = $1`, [wipeKey]);
+  if (!w.rowCount) {
+    const before = await pool.query(`SELECT COUNT(*)::int AS n FROM users`);
+    await pool.query(`TRUNCATE TABLE users RESTART IDENTITY CASCADE`);
+    await pool.query(
+      `INSERT INTO app_meta (key, value) VALUES ($1, $2)`,
+      [wipeKey, new Date().toISOString()]
+    );
+    console.log(`[init] test data wiped: ${before.rows[0].n} user(s) removed`);
+  }
 }
 
 const app = express();
