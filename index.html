@@ -692,6 +692,37 @@ function applyMarketSnapshot(m) {
   MARKET.prices = m.prices || {}; MARKET.stock = m.stock || {};
   MARKET.news = m.news || []; MARKET.nextAt = m.nextAt || 0;
 }
+const RESOURCE_IDS_LIST = ['r_fur','r_herb','r_ore','r_silk','r_gem','r_spice'];
+function applyServerResources(resources) {
+  if (!P || !resources || typeof resources !== 'object') return;
+  if (!P.inv) P.inv = {};
+  for (const rid of RESOURCE_IDS_LIST) {
+    const v = Number(resources[rid])|0;
+    if (v > 0) P.inv[rid] = v;
+    else delete P.inv[rid];
+  }
+}
+let creditQueue = {};
+let creditTimer = null;
+function creditResources(drops) {
+  const tok = authToken(); if (!tok) return;
+  for (const [rid, n] of Object.entries(drops)) {
+    if (n > 0) creditQueue[rid] = (creditQueue[rid]||0) + n;
+  }
+  if (creditTimer) return;
+  creditTimer = setTimeout(async () => {
+    const batch = creditQueue; creditQueue = {}; creditTimer = null;
+    try {
+      const r = await fetch(API_BASE+'/api/inventory/credit', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken()},
+        body: JSON.stringify({ drops: batch })
+      });
+      const j = await r.json().catch(()=>({}));
+      if (r.ok && j.resources) applyServerResources(j.resources);
+    } catch {}
+  }, 800);
+}
 function traderStock(locId, rid) {
   return (MARKET.stock[locId] && MARKET.stock[locId][rid]) || 0;
 }
@@ -837,9 +868,11 @@ async function marketTradeCall(loc, rid, qty, action) {
     });
     const j = await r.json().catch(()=>({}));
     if (j && j.market) applyMarketSnapshot(j.market);
+    if (j && j.resources) applyServerResources(j.resources);
     if (!r.ok) {
       if (j.error === 'out of stock') log(`<span class="bad">Другой игрок успел раньше — ${ITEMS[rid].name.toLowerCase()} разобрали.</span>`);
       else if (j.error === 'no gold') log(`<span class="bad">Не хватает золота: нужно ${j.need}, у тебя ${j.have}.</span>`);
+      else if (j.error === 'no resource') log(`<span class="bad">Сервер видит у тебя ${j.have|0}, а пытаешься продать ${j.need|0}. Сохраняй игру чаще.</span>`);
       else log(`<span class="bad">Ошибка торговли: ${j.error||r.status}.</span>`);
       return null;
     }
@@ -861,7 +894,7 @@ async function tradeBuy(rid) {
   const j = await marketTradeCall(loc, rid, n, 'buy');
   if (!j) { renderResourceGrid(); return; }
   P.gold = (typeof j.gold === 'number') ? j.gold : (P.gold - j.total);
-  P.inv[rid] = (P.inv[rid]||0) + j.qty;
+  if (!j.resources) P.inv[rid] = (P.inv[rid]||0) + j.qty;
   log(`<span class="good"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено у ${TRADERS[loc].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${j.qty} за ${j.total}.</span>`);
   save(); renderResourceGrid(); render();
 }
@@ -881,7 +914,7 @@ async function tradeBuyMax(rid) {
   const j = await marketTradeCall(loc, rid, n, 'buy');
   if (!j) { renderResourceGrid(); return; }
   P.gold = (typeof j.gold === 'number') ? j.gold : (P.gold - j.total);
-  P.inv[rid] = (P.inv[rid]||0) + j.qty;
+  if (!j.resources) P.inv[rid] = (P.inv[rid]||0) + j.qty;
   log(`<span class="good"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено у ${TRADERS[loc].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${j.qty} за ${j.total}.</span>`);
   save(); renderResourceGrid(); render();
 }
@@ -890,7 +923,7 @@ async function tradeSellAll(rid) {
   const have = P.inv[rid] || 0; if (!have) return;
   const j = await marketTradeCall(loc, rid, have, 'sell');
   if (!j) { renderResourceGrid(); return; }
-  P.inv[rid] -= j.qty; if (P.inv[rid]<=0) delete P.inv[rid];
+  if (!j.resources) { P.inv[rid] = (P.inv[rid]||0) - j.qty; if (P.inv[rid]<=0) delete P.inv[rid]; }
   P.gold = (typeof j.gold === 'number') ? j.gold : (P.gold + j.total);
   log(`<span class="info"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Продано ${TRADERS[loc].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${j.qty} за ${j.total} (весь стак).</span>`);
   save(); renderResourceGrid(); render();
@@ -903,7 +936,7 @@ async function tradeSell(rid) {
   n = Math.min(n, have);
   const j = await marketTradeCall(loc, rid, n, 'sell');
   if (!j) { renderResourceGrid(); return; }
-  P.inv[rid] -= j.qty; if (P.inv[rid]<=0) delete P.inv[rid];
+  if (!j.resources) { P.inv[rid] = (P.inv[rid]||0) - j.qty; if (P.inv[rid]<=0) delete P.inv[rid]; }
   P.gold = (typeof j.gold === 'number') ? j.gold : (P.gold + j.total);
   log(`<span class="info"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Продано ${TRADERS[loc].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${j.qty} за ${j.total}.</span>`);
   save(); renderResourceGrid(); render();
@@ -1390,6 +1423,7 @@ async function cloudSync() {
       render();
     }
     if (P && typeof j.pvp_kills === 'number') P.pvp_kills = j.pvp_kills|0;
+    if (j && j.resources) { applyServerResources(j.resources); render(); }
     const lb = $('tab-leaders');
     if (lb && lb.style.display !== 'none') fetchLeaderboard();
   } finally { cloudPushing = false; }
@@ -1407,6 +1441,7 @@ function applyCloudSave(j) {
   P = j.save_blob.P;
   if (typeof j.gold === 'number') P.gold = j.gold|0;
   if (typeof j.pvp_kills === 'number') P.pvp_kills = j.pvp_kills|0;
+  if (j.resources) applyServerResources(j.resources);
   unlocked = j.save_blob.unlocked || ['village','forest'];
   Es = []; target = 0; inCombat = false; pvpMode = false; onArena = false;
   if (P && !P.stages) P.stages = Object.fromEntries(Object.keys(LOCATIONS).map(k=>[k,1]));
@@ -2943,14 +2978,17 @@ function awardKillsLoot(enemies) {
       }
     }
     if (e.resources) {
+      const credit = {};
       for (const [rid, range] of Object.entries(e.resources)) {
         const n = rnd(range[0], range[1]);
         if (n > 0) {
           P.inv[rid] = (P.inv[rid]||0) + n;
+          credit[rid] = (credit[rid]||0) + n;
           log(`<span class="info"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Добыто: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${n}.</span>`);
           onCollect(rid);
         }
       }
+      if (Object.keys(credit).length) creditResources(credit);
     }
     if (Math.random() < 0.18) {
       const drop = Math.random()<0.7 ? 'potion_s' : 'mana_s';

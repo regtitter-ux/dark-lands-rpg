@@ -58,6 +58,12 @@ async function initDb() {
     ALTER TABLE player_data ADD COLUMN IF NOT EXISTS pending_gold_delta INT NOT NULL DEFAULT 0;
   `);
   await pool.query(`
+    ALTER TABLE player_data ADD COLUMN IF NOT EXISTS resources JSONB NOT NULL DEFAULT '{}'::jsonb;
+  `);
+  await pool.query(`
+    ALTER TABLE player_data ADD COLUMN IF NOT EXISTS resources_migrated BOOLEAN NOT NULL DEFAULT FALSE;
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS app_meta (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -195,13 +201,16 @@ app.get('/api/me', auth, async (req, res) => {
       [req.user.uid]
     );
     const r = await pool.query(
-      `SELECT u.username, p.cls, p.lvl, p.stage_max, p.gold, p.bosses, p.pvp_kills, p.save_blob, p.updated_at
+      `SELECT u.username, p.cls, p.lvl, p.stage_max, p.gold, p.bosses, p.pvp_kills,
+              p.save_blob, p.resources, p.updated_at
        FROM users u LEFT JOIN player_data p ON p.user_id = u.id
        WHERE u.id = $1`,
       [req.user.uid]
     );
     if (!r.rowCount) return res.status(404).json({ error: 'not found' });
-    res.json(r.rows[0]);
+    const row = r.rows[0];
+    row.resources = sanitizeResources(row.resources);
+    res.json(row);
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'db error' });
@@ -224,9 +233,16 @@ app.post('/api/save', auth, async (req, res) => {
     return res.status(400).json({ error: 'bad payload' });
   }
   try {
+    const mig = await pool.query(
+      `SELECT resources_migrated FROM player_data WHERE user_id = $1`,
+      [req.user.uid]
+    );
+    const needMigrate = !mig.rowCount || mig.rows[0].resources_migrated === false;
+    const seedResources = needMigrate ? sanitizeResources(save_blob?.P?.inv || {}) : null;
+
     const r = await pool.query(
-      `INSERT INTO player_data (user_id, cls, lvl, stage_max, gold, bosses, save_blob, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      `INSERT INTO player_data (user_id, cls, lvl, stage_max, gold, bosses, save_blob, resources, resources_migrated, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8::jsonb, '{}'::jsonb), $9, NOW())
        ON CONFLICT (user_id) DO UPDATE SET
          cls = COALESCE(EXCLUDED.cls, player_data.cls),
          lvl = EXCLUDED.lvl,
@@ -234,13 +250,22 @@ app.post('/api/save', auth, async (req, res) => {
          gold = GREATEST(0, EXCLUDED.gold + player_data.pending_gold_delta),
          bosses = EXCLUDED.bosses,
          save_blob = EXCLUDED.save_blob,
+         resources = CASE WHEN player_data.resources_migrated THEN player_data.resources
+                          ELSE COALESCE($8::jsonb, '{}'::jsonb) END,
+         resources_migrated = TRUE,
          pending_gold_delta = 0,
          updated_at = NOW()
-       RETURNING gold, pvp_kills`,
-      [req.user.uid, cls || null, lvl|0, stage_max|0, gold|0, bosses|0, save_blob || null]
+       RETURNING gold, pvp_kills, resources`,
+      [req.user.uid, cls || null, lvl|0, stage_max|0, gold|0, bosses|0, save_blob || null,
+       seedResources ? JSON.stringify(seedResources) : null, true]
     );
     const row = r.rows[0] || {};
-    res.json({ ok: true, gold: row.gold|0, pvp_kills: row.pvp_kills|0 });
+    res.json({
+      ok: true,
+      gold: row.gold|0,
+      pvp_kills: row.pvp_kills|0,
+      resources: sanitizeResources(row.resources),
+    });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'db error' });
@@ -269,7 +294,11 @@ const EVENT_TEMPLATES = [
   { kind:'down', mul:[0.4,0.6], tpl:(t,r)=>`${t} получил долг ${r}ом — ему бы скинуть лишнее.` }
 ];
 const MARKET_PERIOD_MS = 60000;
-const MAX_TRADE_QTY = 500;
+const MAX_TRADE_QTY = 9999;
+const MAX_CREDIT_PER_CALL = 20;
+const CREDIT_RATE_WINDOW_MS = 60000;
+const CREDIT_RATE_MAX = 120;
+const creditRate = new Map();
 const market = { prices:{}, stock:{}, news:[], nextAt:0, loaded:false };
 for (const loc of LOCATION_IDS) market.stock[loc] = Object.fromEntries(RESOURCE_IDS.map(r=>[r,0]));
 
@@ -351,6 +380,76 @@ app.get('/api/market', (_req, res) => {
   res.json(snapshotMarket());
 });
 
+function sanitizeResources(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const rid of RESOURCE_IDS) {
+    const v = Number(raw[rid]);
+    if (Number.isFinite(v) && v > 0) out[rid] = Math.min(999999, Math.floor(v));
+  }
+  return out;
+}
+
+app.get('/api/inventory', auth, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT resources FROM player_data WHERE user_id = $1`,
+      [req.user.uid]
+    );
+    if (!r.rowCount) return res.status(404).json({ error: 'no player' });
+    res.json({ resources: sanitizeResources(r.rows[0].resources) });
+  } catch (e) {
+    console.error(e); res.status(500).json({ error: 'db error' });
+  }
+});
+
+app.post('/api/inventory/credit', auth, async (req, res) => {
+  const uid = req.user.uid;
+  const now = Date.now();
+  const rec = creditRate.get(uid) || { windowStart: now, count: 0 };
+  if (now - rec.windowStart > CREDIT_RATE_WINDOW_MS) { rec.windowStart = now; rec.count = 0; }
+  rec.count++;
+  creditRate.set(uid, rec);
+  if (rec.count > CREDIT_RATE_MAX) return res.status(429).json({ error: 'rate limit' });
+
+  const drops = req.body?.drops || {};
+  const clean = {};
+  let total = 0;
+  for (const rid of RESOURCE_IDS) {
+    const v = Number(drops[rid]);
+    if (Number.isFinite(v) && v > 0) {
+      const n = Math.min(MAX_CREDIT_PER_CALL, Math.floor(v));
+      clean[rid] = n;
+      total += n;
+    }
+  }
+  if (!total) return res.json({ ok:true, resources: {}, credited: {} });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const cur = await client.query(
+      `SELECT resources FROM player_data WHERE user_id = $1 FOR UPDATE`,
+      [uid]
+    );
+    if (!cur.rowCount) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'no player' }); }
+    const have = sanitizeResources(cur.rows[0].resources);
+    for (const rid of Object.keys(clean)) have[rid] = (have[rid]|0) + clean[rid];
+    await client.query(
+      `UPDATE player_data SET resources = $1::jsonb, updated_at = NOW() WHERE user_id = $2`,
+      [JSON.stringify(have), uid]
+    );
+    await client.query('COMMIT');
+    res.json({ ok:true, resources: have, credited: clean });
+  } catch (e) {
+    await client.query('ROLLBACK').catch(()=>{});
+    console.error('credit error:', e);
+    res.status(500).json({ error: 'db error' });
+  } finally {
+    client.release();
+  }
+});
+
 app.post('/api/market/trade', auth, async (req, res) => {
   ensureMarket();
   const { loc, rid, qty, action } = req.body || {};
@@ -368,7 +467,7 @@ app.post('/api/market/trade', auth, async (req, res) => {
   try {
     await client.query('BEGIN');
     const pr = await client.query(
-      `SELECT GREATEST(0, gold + pending_gold_delta) AS eff
+      `SELECT GREATEST(0, gold + pending_gold_delta) AS eff, resources
          FROM player_data WHERE user_id = $1 FOR UPDATE`,
       [req.user.uid]
     );
@@ -377,6 +476,7 @@ app.post('/api/market/trade', auth, async (req, res) => {
       return res.status(404).json({ error: 'no player' });
     }
     const eff = pr.rows[0].eff|0;
+    const resources = sanitizeResources(pr.rows[0].resources);
 
     if (action === 'buy') {
       const have = market.stock[loc][rid]|0;
@@ -388,29 +488,41 @@ app.post('/api/market/trade', auth, async (req, res) => {
         await client.query('ROLLBACK');
         return res.status(409).json({ error: 'no gold', need: total, have: eff, market: snapshotMarket() });
       }
+      resources[rid] = (resources[rid]|0) + n;
       await client.query(
         `UPDATE player_data
-            SET pending_gold_delta = pending_gold_delta - $1, updated_at = NOW()
-          WHERE user_id = $2`,
-        [total, req.user.uid]
+            SET pending_gold_delta = pending_gold_delta - $1,
+                resources = $2::jsonb,
+                updated_at = NOW()
+          WHERE user_id = $3`,
+        [total, JSON.stringify(resources), req.user.uid]
       );
       market.stock[loc][rid] = have - n;
       await client.query('COMMIT');
       persistMarket();
-      return res.json({ ok:true, action, loc, rid, qty:n, price, total, gold: eff - total, market: snapshotMarket() });
+      return res.json({ ok:true, action, loc, rid, qty:n, price, total, gold: eff - total, resources, market: snapshotMarket() });
     }
 
     // sell
+    const owned = resources[rid]|0;
+    if (owned < n) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'no resource', have: owned, need: n, resources, market: snapshotMarket() });
+    }
+    resources[rid] = owned - n;
+    if (resources[rid] <= 0) delete resources[rid];
     await client.query(
       `UPDATE player_data
-          SET pending_gold_delta = pending_gold_delta + $1, updated_at = NOW()
-        WHERE user_id = $2`,
-      [total, req.user.uid]
+          SET pending_gold_delta = pending_gold_delta + $1,
+              resources = $2::jsonb,
+              updated_at = NOW()
+        WHERE user_id = $3`,
+      [total, JSON.stringify(resources), req.user.uid]
     );
     market.stock[loc][rid] = (market.stock[loc][rid]|0) + n;
     await client.query('COMMIT');
     persistMarket();
-    return res.json({ ok:true, action, loc, rid, qty:n, price, total, gold: eff + total, market: snapshotMarket() });
+    return res.json({ ok:true, action, loc, rid, qty:n, price, total, gold: eff + total, resources, market: snapshotMarket() });
   } catch (e) {
     await client.query('ROLLBACK').catch(()=>{});
     console.error('trade error:', e);
