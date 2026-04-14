@@ -310,6 +310,7 @@
         <div class="tab active" data-tab="inv">Сумка</div>
         <div class="tab" data-tab="map">Карта</div>
         <div class="tab" data-tab="quest">Свиток <span class="badge" id="quest-badge" style="display:none">0</span></div>
+        <div class="tab" data-tab="leaders">Рейтинг</div>
       </div>
       <div id="tab-inv">
         <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Зелья и припасы</h3><div class="body" id="inv-body"></div></div>
@@ -323,6 +324,10 @@
         <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Доступные задания</h3><div class="body" id="avail-body"></div></div>
         <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Активные задания</h3><div class="body" id="active-body"></div></div>
         <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Завершённые</h3><div class="body" id="done-body" style="font-size:11px"></div></div>
+      </div>
+      <div id="tab-leaders" style="display:none">
+        <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Облачный профиль</h3><div class="body" id="cloud-body"></div></div>
+        <div class="panel"><h3><img class="gi" src="assets/icons/star-formation.svg" alt=""> Топ-50 героев</h3><div class="body" id="leaders-body" style="font-size:12px">загрузка...</div></div>
       </div>
     </div>
   </div>
@@ -1081,9 +1086,142 @@ document.querySelectorAll('.tab').forEach(t => {
   t.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
     t.classList.add('active');
-    ['inv','map','quest'].forEach(k => $('tab-'+k).style.display = (k===t.dataset.tab?'block':'none'));
+    ['inv','map','quest','leaders'].forEach(k => $('tab-'+k).style.display = (k===t.dataset.tab?'block':'none'));
+    if (t.dataset.tab === 'leaders') { renderCloudPanel(); fetchLeaderboard(); }
   });
 });
+
+// ==================== ОБЛАЧНЫЙ ПРОФИЛЬ + РЕЙТИНГ ====================
+const API_BASE = 'https://dark-lands-rpg-production.up.railway.app';
+const CLOUD_KEY = 'sumrachnye_cloud_v1';
+function cloudLoad() { try { return JSON.parse(localStorage.getItem(CLOUD_KEY)) || {}; } catch { return {}; } }
+function cloudSet(o) { localStorage.setItem(CLOUD_KEY, JSON.stringify(o)); }
+function cloudUuid() { return cloudLoad().uuid || null; }
+function cloudNick() { return cloudLoad().nick || null; }
+function statsForSync() {
+  if (!P) return null;
+  const stageMax = Math.max(1, ...Object.values(P.stages || {1:1}));
+  return {
+    nick: cloudNick(),
+    cls: P.cls,
+    lvl: P.lvl|0,
+    stage_max: stageMax,
+    gold: P.gold|0,
+    bosses: (P.killedBosses||[]).length,
+    save_blob: { P, unlocked },
+  };
+}
+async function cloudRegister(nick) {
+  const r = await fetch(API_BASE+'/api/register', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ nick })
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || 'register failed');
+  cloudSet({ uuid:j.uuid, nick:j.nick });
+  return j;
+}
+async function cloudSync() {
+  const uuid = cloudUuid(); if (!uuid) return;
+  const s = statsForSync(); if (!s) return;
+  const r = await fetch(API_BASE+'/api/save', {
+    method:'POST', headers:{'Content-Type':'application/json','x-uuid':uuid},
+    body: JSON.stringify(s)
+  });
+  if (!r.ok) { const j = await r.json().catch(()=>({})); throw new Error(j.error || 'save failed'); }
+}
+async function cloudPull() {
+  const uuid = cloudUuid(); if (!uuid) throw new Error('нет UUID');
+  const r = await fetch(API_BASE+'/api/load?uuid='+encodeURIComponent(uuid));
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || 'load failed');
+  if (!j.save_blob || !j.save_blob.P) throw new Error('пустой сейв');
+  if (!confirm('Заменить текущий прогресс облачным? (текущий локальный сейв будет потерян)')) return;
+  P = j.save_blob.P;
+  unlocked = j.save_blob.unlocked || unlocked;
+  Es = []; target = 0; inCombat = false;
+  save(); render(); renderCloudPanel();
+}
+async function fetchLeaderboard() {
+  const el = $('leaders-body');
+  try {
+    const r = await fetch(API_BASE+'/api/leaderboard');
+    const list = await r.json();
+    if (!Array.isArray(list) || !list.length) { el.innerHTML = '<div style="color:#6b4423;font-style:italic">пока никого</div>'; return; }
+    const myNick = cloudNick();
+    const rows = list.map((row,i) => {
+      const me = myNick && row.nick.toLowerCase()===myNick.toLowerCase();
+      return `<tr style="${me?'background:rgba(244,208,63,0.12)':''}">
+        <td style="padding:3px 6px;color:#8b6f47">${i+1}</td>
+        <td style="padding:3px 6px;color:${me?'#f4d03f':'#d4b87a'}"><b>${escapeHtml(row.nick)}</b>${row.cls?` <span style="color:#6b4423;font-size:10px">(${row.cls})</span>`:''}</td>
+        <td style="padding:3px 6px;text-align:right">${row.lvl}</td>
+        <td style="padding:3px 6px;text-align:right">${row.stage_max}</td>
+        <td style="padding:3px 6px;text-align:right;color:#f4d03f">${row.gold}</td>
+        <td style="padding:3px 6px;text-align:right">${row.bosses}</td>
+      </tr>`;
+    }).join('');
+    el.innerHTML = `<table style="width:100%;border-collapse:collapse">
+      <thead><tr style="color:#8b6f47;border-bottom:1px solid #4a2818;font-size:11px">
+        <th style="text-align:left;padding:3px 6px">#</th>
+        <th style="text-align:left;padding:3px 6px">Герой</th>
+        <th style="text-align:right;padding:3px 6px">Ур.</th>
+        <th style="text-align:right;padding:3px 6px">Этап</th>
+        <th style="text-align:right;padding:3px 6px">Золото</th>
+        <th style="text-align:right;padding:3px 6px">Боссы</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  } catch (e) {
+    el.innerHTML = `<div style="color:#cf4030">ошибка: ${escapeHtml(e.message)}</div>`;
+  }
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function renderCloudPanel() {
+  const el = $('cloud-body'); if (!el) return;
+  const nick = cloudNick();
+  if (!nick) {
+    el.innerHTML = `
+      <div style="color:#8b6f47;font-size:12px;margin-bottom:6px">Зарегистрируй ник, чтобы попасть в рейтинг и получить облачный сейв.</div>
+      <input id="cloud-nick" placeholder="ник (2-24 симв.)" maxlength="24" style="background:#1a0f08;border:1px solid #6b4423;color:#d4b87a;padding:4px 6px;font-family:inherit;width:60%">
+      <button class="tiny" onclick="doCloudRegister()">Регистрация</button>
+      <div id="cloud-msg" style="color:#cf4030;font-size:11px;margin-top:6px"></div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div style="color:#d4b87a;font-size:12px">Ник: <b style="color:#f4d03f">${escapeHtml(nick)}</b></div>
+    <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+      <button class="tiny" onclick="doCloudSync()">Сохранить в облако</button>
+      <button class="tiny" onclick="doCloudPull()">Загрузить из облака</button>
+    </div>
+    <div id="cloud-msg" style="color:#6abe30;font-size:11px;margin-top:6px"></div>`;
+}
+async function doCloudRegister() {
+  const el = document.getElementById('cloud-nick');
+  const msg = document.getElementById('cloud-msg');
+  const nick = (el.value||'').trim();
+  if (nick.length < 2) { msg.textContent='ник минимум 2 символа'; return; }
+  try {
+    await cloudRegister(nick);
+    await cloudSync();
+    renderCloudPanel(); fetchLeaderboard();
+    log(`<span class="good">Облачный профиль создан: ${escapeHtml(nick)}.</span>`);
+  } catch (e) {
+    msg.textContent = e.message;
+  }
+}
+async function doCloudSync() {
+  const msg = document.getElementById('cloud-msg');
+  msg.style.color='#5fb3d4'; msg.textContent='синхронизация...';
+  try { await cloudSync(); msg.style.color='#6abe30'; msg.textContent='сохранено в облаке ✓'; fetchLeaderboard(); }
+  catch (e) { msg.style.color='#cf4030'; msg.textContent=e.message; }
+}
+async function doCloudPull() {
+  const msg = document.getElementById('cloud-msg');
+  try { await cloudPull(); msg.style.color='#6abe30'; msg.textContent='загружено из облака ✓'; }
+  catch (e) { msg.style.color='#cf4030'; msg.textContent=e.message; }
+}
+// Auto-sync every 60s if registered
+setInterval(() => { if (cloudUuid() && P) cloudSync().catch(()=>{}); }, 60000);
 
 function startGame(name, cls) {
   const c = CLASSES[cls];
