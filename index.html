@@ -1137,8 +1137,31 @@ function confirmDialog(text, opts = {}) {
   });
 }
 async function newGame() {
-  if (P && !(await confirmDialog('Удалить сохранение и начать новую игру?', { title:'Новая игра', okText:'Стереть и начать', danger:true }))) return;
-  localStorage.removeItem(SAVE_KEY); location.reload();
+  const hasAccount = !!authToken();
+  const msg = hasAccount
+    ? 'Удалить аккаунт <b>полностью</b> и начать заново?<br><span style="color:#cf4030">Сейв, история и ник будут безвозвратно удалены из облака. Ник освободится для других игроков.</span>'
+    : 'Удалить локальное сохранение и начать заново?';
+  if (!(await confirmDialog(msg, { title:'Новая игра', okText:'Удалить и начать', danger:true }))) return;
+  if (hasAccount) {
+    try {
+      const r = await fetch(API_BASE + '/api/me', {
+        method:'DELETE',
+        headers:{ 'Authorization':'Bearer '+authToken() }
+      });
+      if (!r.ok && r.status !== 401) {
+        const j = await r.json().catch(()=>({}));
+        alert('Не удалось удалить аккаунт: ' + (j.error || r.status));
+        return;
+      }
+    } catch {
+      alert('Нет связи с сервером. Попробуй ещё раз.');
+      return;
+    }
+    authClear();
+  }
+  if (cloudPushTimer) { clearTimeout(cloudPushTimer); cloudPushTimer = null; }
+  try { localStorage.removeItem(SAVE_KEY); } catch {}
+  location.reload();
 }
 let saveTimer=null;
 function flashSave() {

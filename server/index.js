@@ -153,6 +153,16 @@ app.get('/api/me', auth, async (req, res) => {
   }
 });
 
+app.delete('/api/me', auth, async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM users WHERE id = $1`, [req.user.uid]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'db error' });
+  }
+});
+
 app.post('/api/save', auth, async (req, res) => {
   const { cls, lvl, stage_max, gold, bosses, save_blob } = req.body || {};
   if (typeof lvl !== 'number' || typeof gold !== 'number') {
