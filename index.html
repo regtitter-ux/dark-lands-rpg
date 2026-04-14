@@ -1416,6 +1416,7 @@ async function cloudPull() {
 }
 async function doLogout() {
   if (!(await confirmDialog('Выйти из аккаунта и вернуться в главное меню?<br><span style="color:#8b6f47">Прогресс уже сохранён в облаке.</span>', { title:'Выход', okText:'Выйти' }))) return;
+  await leaveArena(true).catch(()=>{});
   authClear();
   if (cloudPushTimer) { clearTimeout(cloudPushTimer); cloudPushTimer = null; }
   try { localStorage.removeItem(SAVE_KEY); } catch {}
@@ -1993,10 +1994,12 @@ function renderQuests() {
 function renderActions() {
   const el = $('actions');
   if (inCombat) {
+    const leaveBtn = pvpMode ? `<button class="act" onclick="leaveArena()"><img class="gi" src="assets/icons/run.svg" alt=""> Покинуть бой</button>` : '';
     el.innerHTML = `
       <button class="act" onclick="attack()"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Атаковать</button>
       <button class="act" onclick="defend()"><img class="gi" src="assets/icons/round-shield.svg" alt=""> Защита</button>
-      <button class="act" onclick="flee()"><img class="gi" src="assets/icons/run.svg" alt=""> Бежать</button>
+      ${pvpMode ? '' : `<button class="act" onclick="flee()"><img class="gi" src="assets/icons/run.svg" alt=""> Бежать</button>`}
+      ${leaveBtn}
       <button class="act" onclick="document.querySelector('[data-tab=inv]').click()"><img class="gi" src="assets/icons/knapsack.svg" alt=""> Сумка</button>
     `; return;
   }
@@ -2428,12 +2431,44 @@ function buildArenaEnemy(p) {
     _pvp: true, _pvpTargetId: p.id, _pvpUsername: p.username, _pvpResolved: false,
   };
 }
+let arenaHeartbeat = null;
+function stopArenaHeartbeat() {
+  if (arenaHeartbeat) { clearInterval(arenaHeartbeat); arenaHeartbeat = null; }
+}
+async function leaveArena(silent=false) {
+  stopArenaHeartbeat();
+  const tok = authToken();
+  if (!tok) return;
+  try {
+    await fetch(API_BASE+'/api/arena/leave', {
+      method:'POST',
+      headers:{'Authorization':'Bearer '+tok}
+    });
+  } catch {}
+  if (!silent && pvpMode) {
+    log(`<span class="info">Ты покидаешь Круговую арену.</span>`);
+    stopCombatLoop(); inCombat=false; pvpMode=false; Es=[]; target=0;
+    render();
+  }
+}
+function leaveArenaBeacon() {
+  const tok = authToken();
+  if (!tok) return;
+  try {
+    navigator.sendBeacon(API_BASE+'/api/arena/leave-beacon?t='+encodeURIComponent(tok));
+  } catch {}
+}
+window.addEventListener('pagehide', leaveArenaBeacon);
+window.addEventListener('beforeunload', leaveArenaBeacon);
 async function arena() {
   if (inCombat) return;
   if (!authToken()) { log(`<span class="bad">Чтобы выйти на арену, нужно войти в аккаунт.</span>`); return; }
   let list = [];
   try {
-    const r = await fetch(API_BASE+'/api/arena', { headers: {'Authorization':'Bearer '+authToken()} });
+    const r = await fetch(API_BASE+'/api/arena/enter', {
+      method:'POST',
+      headers:{'Authorization':'Bearer '+authToken()}
+    });
     if (!r.ok) throw new Error('HTTP '+r.status);
     const j = await r.json();
     list = Array.isArray(j.players) ? j.players : [];
@@ -2444,7 +2479,8 @@ async function arena() {
   hr();
   log(`<span class="sys"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> — Круговая арена —</span>`);
   if (!list.length) {
-    log(`<span class="info">Арена пуста — нет других героев. Загляни позже.</span>`);
+    log(`<span class="info">Арена пуста — ты здесь один. Жди соперников или загляни позже.</span>`);
+    await leaveArena(true);
     return;
   }
   Es = list.slice(0, 6).map(buildArenaEnemy);
@@ -2454,6 +2490,14 @@ async function arena() {
   inCombat = true;
   startCombatLoop();
   log(`<span class="bad">Все против всех! Соперники: ${Es.map(e=>e.name).join(', ')}.</span>`);
+  stopArenaHeartbeat();
+  arenaHeartbeat = setInterval(() => {
+    if (!pvpMode) { stopArenaHeartbeat(); return; }
+    fetch(API_BASE+'/api/arena/heartbeat', {
+      method:'POST',
+      headers:{'Authorization':'Bearer '+authToken()}
+    }).catch(()=>{});
+  }, 10000);
   render();
 }
 async function resolveArenaFight(targetId, won) {
@@ -2747,6 +2791,7 @@ function winFight() {
   if (pvpMode) {
     hr();
     log(`<span class="epic"><img class="gi" src="assets/icons/star-formation.svg" alt=""> Арена зачищена!</span>`);
+    leaveArena(true);
     stopCombatLoop(); inCombat=false; pvpMode=false; Es=[]; target=0;
     render();
     return;
@@ -2805,6 +2850,7 @@ function die() {
     P.hp = Math.floor(eff('hpMax')/2);
     P.mp = Math.floor(eff('mpMax')/2);
     log(`<span class="bad"><img class="gi" src="assets/icons/death-skull.svg" alt=""> Ты повержен на арене. Опыт и этап остались нетронутыми.</span>`);
+    leaveArena(true);
     stopCombatLoop(); inCombat=false; pvpMode=false; Es=[]; target=0;
     render();
     return;

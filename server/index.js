@@ -320,32 +320,67 @@ app.post('/api/market/trade', auth, (req, res) => {
 });
 
 // ==================== PVP ARENA ====================
-app.get('/api/arena', auth, async (req, res) => {
+const arena = new Map(); // userId -> { username, cls, lvl, gold, pvp_kills, hp_max, lastSeen }
+const ARENA_TIMEOUT_MS = 30000;
+function arenaPrune() {
+  const now = Date.now();
+  for (const [id, p] of arena) if (now - p.lastSeen > ARENA_TIMEOUT_MS) arena.delete(id);
+}
+function arenaListFor(uid) {
+  arenaPrune();
+  const list = [];
+  for (const [id, p] of arena) {
+    if (id === uid) continue;
+    list.push({ id, username: p.username, cls: p.cls, lvl: p.lvl, gold: p.gold, pvp_kills: p.pvp_kills, hp_max: p.hp_max });
+  }
+  return list;
+}
+
+app.post('/api/arena/enter', auth, async (req, res) => {
   try {
     const r = await pool.query(
-      `SELECT u.id, u.username, p.cls, p.lvl,
+      `SELECT u.username, p.cls, p.lvl,
               GREATEST(0, p.gold + p.pending_gold_delta) AS gold,
               p.pvp_kills, p.save_blob
-       FROM player_data p JOIN users u ON u.id = p.user_id
-       WHERE u.id <> $1
-       ORDER BY p.lvl DESC, p.gold DESC
-       LIMIT 30`,
+       FROM users u JOIN player_data p ON p.user_id = u.id
+       WHERE u.id = $1`,
       [req.user.uid]
     );
-    const list = r.rows.map(row => ({
-      id: row.id,
+    if (!r.rowCount) return res.status(404).json({ error: 'not found' });
+    const row = r.rows[0];
+    arena.set(req.user.uid, {
       username: row.username,
       cls: row.cls,
       lvl: row.lvl|0,
       gold: row.gold|0,
       pvp_kills: row.pvp_kills|0,
       hp_max: (row.save_blob && row.save_blob.P && (row.save_blob.P.hpMax|0)) || null,
-    }));
-    res.json({ players: list });
+      lastSeen: Date.now(),
+    });
+    res.json({ ok: true, players: arenaListFor(req.user.uid) });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'db error' });
   }
+});
+
+app.post('/api/arena/leave', auth, (req, res) => {
+  arena.delete(req.user.uid);
+  res.json({ ok: true });
+});
+
+app.post('/api/arena/leave-beacon', (req, res) => {
+  const t = req.query.t;
+  if (t) {
+    try { const u = jwt.verify(t, JWT_SECRET); arena.delete(u.uid); } catch {}
+  }
+  res.status(204).end();
+});
+
+app.post('/api/arena/heartbeat', auth, (req, res) => {
+  const p = arena.get(req.user.uid);
+  if (p) p.lastSeen = Date.now();
+  res.json({ ok: true, present: arena.has(req.user.uid), players: arenaListFor(req.user.uid) });
 });
 
 app.post('/api/arena/resolve', auth, async (req, res) => {
