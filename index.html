@@ -2501,6 +2501,7 @@ async function pollArenaStateOnce() {
     P.mp = j.me.mp|0;
     if (j.me.defendUntil) P._defUntil = j.me.defendUntil;
     if (typeof j.me.pvp_kills === 'number') P.pvp_kills = j.me.pvp_kills;
+    if (j.me.spellCd) P.spellCd = { ...(P.spellCd||{}), ...j.me.spellCd };
   }
   syncEsFromArena(j.players || []);
   render();
@@ -2584,7 +2585,7 @@ async function arena() {
     const r = await fetch(API_BASE+'/api/arena/enter', {
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken()},
-      body: JSON.stringify({ stats: computeArenaStats() })
+      body: JSON.stringify({ stats: computeArenaStats(), spellLvl: P.spellLvl || {} })
     });
     if (!r.ok) throw new Error('HTTP '+r.status);
     await r.json();
@@ -2660,6 +2661,65 @@ async function arenaDefend() {
   render();
 }
 
+async function arenaCast(key) {
+  const s = SPELLS[key]; if (!s) return;
+  const body = { type:'cast', spell: key };
+  if (!s.heal && s.aoe !== 'all') {
+    ensureTarget();
+    const e = Es[target];
+    if (!e || !e._pvp || e._dead) return;
+    body.target_id = e._pvpTargetId;
+  }
+  const res = await arenaAction(body);
+  if (!res.ok) return;
+  const j = res.j;
+  if (!j.ok) {
+    if (j.reason === 'mp') log(`<span class="bad">Недостаточно маны для ${s.name}.</span>`);
+    else if (j.reason === 'cd') { /* silent */ }
+    else if (j.reason === 'no target') log(`<span class="bad">${s.name}: нет цели.</span>`);
+    return;
+  }
+  const c = j.cast;
+  if (!P.spellCd) P.spellCd = {};
+  if (c.cd_until) P.spellCd[key] = c.cd_until;
+  if (typeof c.self_mp === 'number') P.mp = c.self_mp;
+  if (c.heal) {
+    P.hp = c.self_hp|0;
+    log(`<span class="magic">${s.ico} ${s.name}: восстановлено ${c.heal} HP.</span>`);
+    render();
+    return;
+  }
+  if (Array.isArray(c.hits)) {
+    for (const h of c.hits) {
+      const entry = Es.find(e => e._pvp && e._pvpTargetId === h.target_id);
+      if (!entry) continue;
+      if (h.dodged) {
+        log(`<span class="info">${escapeHtml(entry._pvpUsername)} уворачивается от ${s.name}!</span>`);
+        continue;
+      }
+      entry.hp = h.hp|0; entry.hpMax = h.hpMax|0;
+      if (h.dead) entry._dead = true;
+      log(`<span class="magic">${s.ico} ${s.name}: ${h.dmg} урона по ${escapeHtml(entry._pvpUsername)}.</span>`);
+    }
+  }
+  if (Array.isArray(c.kills) && c.kills.length) {
+    let totalTransfer = 0;
+    for (const k of c.kills) {
+      totalTransfer += k.transfer|0;
+      const entry = Es.find(e => e._pvp && e._pvpTargetId === k.target_id);
+      const nm = entry ? entry._pvpUsername : 'соперник';
+      log(`<span class="good"><img class="gi" src="assets/icons/star-formation.svg" alt=""> ${escapeHtml(nm)} повержен! Трофей: +${k.transfer} <img class="gi" src="assets/icons/two-coins.svg" alt="">.</span>`);
+    }
+    P.gold = Math.max(0, P.gold + totalTransfer);
+    if (typeof c.pvp_kills === 'number') P.pvp_kills = c.pvp_kills;
+    cloudSync().catch(()=>{});
+    const lb = $('tab-leaders');
+    if (lb && lb.style.display !== 'none') fetchLeaderboard();
+  }
+  renderSpells();
+  render();
+}
+
 function hunt() {
   const loc = P.location;
   const s = P.stages[loc] || 1;
@@ -2724,7 +2784,7 @@ function spellMul(key) { return 1 + 0.2 * ((P.spellLvl && P.spellLvl[key]) || 0)
 function cast(key) {
   const s = SPELLS[key];
   if (P.mp<s.cost || !inCombat) return;
-  if (pvpMode) { log(`<span class="info">На арене заклинания недоступны — только клинок и щит.</span>`); return; }
+  if (pvpMode) { arenaCast(key); return; }
   if (!P.spellCd) P.spellCd = {};
   if ((P.spellCd[key]||0) > Date.now()) return;
   P.spellCd[key] = Date.now() + 30000;
@@ -2813,6 +2873,7 @@ function combatTickFn() {
   const now = Date.now();
   if (pvpMode) {
     if (P._defUntil && now > P._defUntil) { P._defUntil = 0; render(); }
+    if (P.spellCd && Object.values(P.spellCd).some(t => t > now && t - now < 30200)) renderSpells();
     return;
   }
   if (P.spellCd && Object.values(P.spellCd).some(t => t > now && t - now < 30200)) renderSpells();

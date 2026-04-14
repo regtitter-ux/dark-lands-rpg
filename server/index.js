@@ -376,6 +376,29 @@ const DEFEND_DUR_MS = 1500;
 const DEFEND_CD_MS = 3000;
 const REGEN_TICK_MS = 2500;
 const CORPSE_LINGER_MS = 4000;
+const SPELL_CD_MS = 30000;
+
+const SPELLS = {
+  fireball:   { cost:12, dmg:[14,22] },
+  iceshard:   { cost:8,  dmg:[9,15] },
+  lightning:  { cost:18, dmg:[22,32], aoe:'chain', chain:0.6 },
+  frostnova:  { cost:22, dmg:[16,24], aoe:'all',   mult:0.7 },
+  heal:       { cost:10, heal:[18,28] },
+  poison:     { cost:6,  dmg:[10,16] },
+  shadow:     { cost:14, dmg:[18,28] },
+  smokebomb:  { cost:16, dmg:[10,16], aoe:'all',   mult:0.5 },
+  rage:       { cost:8,  dmg:[12,20] },
+  cleave:     { cost:14, dmg:[20,30], aoe:'chain', chain:0.5 },
+  whirlwind:  { cost:22, dmg:[18,28], aoe:'all',   mult:0.6 },
+};
+function spellMul(spellLvl, key) { return 1 + 0.2 * ((spellLvl && spellLvl[key]) || 0); }
+function rndI(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+function applyDamage(tgt, now, dmg) {
+  if (tgt.defendUntil > now) dmg = Math.max(1, Math.floor(dmg / 2));
+  dmg = Math.max(1, Math.floor(dmg));
+  tgt.hp = Math.max(0, tgt.hp - dmg);
+  return dmg;
+}
 
 function arenaPrune() {
   const now = Date.now();
@@ -446,12 +469,19 @@ app.post('/api/arena/enter', auth, async (req, res) => {
     const stats = sanitizeStats(req.body?.stats || {});
     const now = Date.now();
     const wasPresent = arena.has(req.user.uid) && !arena.get(req.user.uid).dead;
+    const rawSl = req.body?.spellLvl || {};
+    const spellLvl = {};
+    for (const k of Object.keys(SPELLS)) {
+      const v = Number(rawSl[k]);
+      if (Number.isFinite(v) && v > 0) spellLvl[k] = Math.max(0, Math.min(20, v|0));
+    }
     arena.set(req.user.uid, {
       username: base.username, cls: base.cls, lvl: base.lvl|0,
       hpMax: stats.hpMax, hp: stats.hpMax,
       mpMax: stats.mpMax, mp: stats.mpMax,
       str: stats.str, agi: stats.agi, int_: stats.int_,
       armor: stats.armor, crit: stats.crit, wdmg: stats.wdmg,
+      spellLvl, spellCd: {},
       defendUntil: 0, lastAttack: 0, lastDefend: 0,
       lastRegen: now, lastSeen: now,
       dead: false, killedBy: null, deathAt: 0,
@@ -589,6 +619,79 @@ app.post('/api/arena/action', auth, async (req, res) => {
     }
     return res.json({ ok: true, attack: { dmg, crit, target_id: tid, target_hp: tgt.hp, target_hpMax: tgt.hpMax, kill } });
   }
+  if (type === 'cast') {
+    const key = String(req.body?.spell || '');
+    const sp = SPELLS[key];
+    if (!sp) return res.status(400).json({ error: 'bad spell' });
+    const cdAt = self.spellCd[key] || 0;
+    if (cdAt > now) return res.json({ ok: false, reason: 'cd', cd_ms: cdAt - now });
+    if (self.mp < sp.cost) return res.json({ ok: false, reason: 'mp' });
+    self.mp -= sp.cost;
+    self.spellCd[key] = now + SPELL_CD_MS;
+    const mul = spellMul(self.spellLvl, key);
+
+    if (sp.heal) {
+      const h = Math.ceil((rndI(sp.heal[0], sp.heal[1]) + self.int_) * mul);
+      self.hp = Math.min(self.hpMax, self.hp + h);
+      return res.json({ ok: true, cast: { spell: key, mp_cost: sp.cost, heal: h, self_hp: self.hp, self_mp: self.mp, cd_until: self.spellCd[key] } });
+    }
+
+    const tid = parseInt(req.body?.target_id)|0;
+    const primary = tid && tid !== me ? arena.get(tid) : null;
+    if (!primary && !sp.aoe) return res.json({ ok: false, reason: 'no target' });
+    if (primary && primary.dead && !sp.aoe) return res.json({ ok: false, reason: 'no target' });
+
+    const base = Math.ceil((rndI(sp.dmg[0], sp.dmg[1]) + self.int_) * mul);
+    const hits = [];
+    const kills = [];
+
+    async function doHit(targetId, target, dmg) {
+      tickRegen(target, now);
+      const dodge = Math.min(0.35, target.agi * 0.012);
+      if (Math.random() < dodge) { hits.push({ target_id: targetId, dodged: true }); return; }
+      const applied = applyDamage(target, now, dmg);
+      const hit = { target_id: targetId, dmg: applied, hp: target.hp, hpMax: target.hpMax };
+      if (target.hp <= 0) {
+        target.dead = true; target.killedBy = me; target.deathAt = now;
+        kills.push(targetId); hit.dead = true;
+      }
+      hits.push(hit);
+    }
+
+    if (sp.aoe === 'all') {
+      const dealt = Math.max(1, Math.floor(base * (sp.mult || 0.7)));
+      for (const [id, p] of arena) {
+        if (id === me || p.dead) continue;
+        await doHit(id, p, dealt);
+      }
+    } else if (sp.aoe === 'chain') {
+      if (!primary || primary.dead) { self.mp += sp.cost; self.spellCd[key] = cdAt; return res.json({ ok:false, reason:'no target' }); }
+      await doHit(tid, primary, base);
+      const splash = Math.max(1, Math.floor(base * (sp.chain || 0.5)));
+      for (const [id, p] of arena) {
+        if (id === me || id === tid || p.dead) continue;
+        await doHit(id, p, splash);
+      }
+    } else {
+      if (!primary || primary.dead) { self.mp += sp.cost; self.spellCd[key] = cdAt; return res.json({ ok:false, reason:'no target' }); }
+      await doHit(tid, primary, base);
+    }
+
+    const killResults = [];
+    for (const loserId of kills) {
+      const r = await resolveKill(me, loserId);
+      killResults.push({ target_id: loserId, transfer: r.transfer|0, pvp_kills: r.pvp_kills|0 });
+      self.pvp_kills = r.pvp_kills || self.pvp_kills;
+    }
+    return res.json({
+      ok: true,
+      cast: {
+        spell: key, mp_cost: sp.cost, self_mp: self.mp,
+        cd_until: self.spellCd[key],
+        hits, kills: killResults, pvp_kills: self.pvp_kills,
+      },
+    });
+  }
   return res.status(400).json({ error: 'bad action' });
 });
 
@@ -608,6 +711,7 @@ app.get('/api/arena/state', auth, (req, res) => {
     defendReadyAt: self.lastDefend + DEFEND_CD_MS,
     pvp_kills: self.pvp_kills,
     username: self.username,
+    spellCd: self.spellCd || {},
   } : { present: false };
   res.json({ me: meOut, players: arenaListFor(me), now });
 });
