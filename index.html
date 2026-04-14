@@ -1157,8 +1157,14 @@ function migrateEquipment() {
 // ==================== СТАРТ ====================
 document.querySelectorAll('.cls').forEach(el => {
   el.addEventListener('click', () => {
+    if (!authToken()) {
+      const msg = document.getElementById('cloud-msg');
+      if (msg) { msg.style.color='#cf4030'; msg.textContent='Сначала войди или зарегистрируйся'; }
+      const u = document.getElementById('auth-user'); if (u) u.focus();
+      return;
+    }
     const cls = el.dataset.cls;
-    const name = $('name-input').value.trim() || 'Безымянный';
+    const name = $('name-input').value.trim() || authUsername() || 'Безымянный';
     startGame(name, cls);
   });
 });
@@ -1326,7 +1332,6 @@ function renderCloudPanel() {
         <div style="display:flex;gap:6px;justify-content:center;margin-top:2px">
           <button class="tiny" onclick="doAuthLogin()">Войти</button>
           <button class="tiny" onclick="doAuthRegister()">Регистрация</button>
-          <button class="tiny" onclick="doSkipAuth()" style="opacity:0.7">Пропустить</button>
         </div>
       </div>
       <div id="cloud-msg" style="color:#cf4030;font-size:11px;margin-top:6px;text-align:center;min-height:14px"></div>`;
@@ -1342,10 +1347,6 @@ function renderCloudPanel() {
     <div id="cloud-msg" style="color:#6abe30;font-size:11px;margin-top:6px;text-align:center;min-height:14px"></div>`;
   const ni = $('name-input');
   if (ni && (ni.value === 'Безымянный' || !ni.value)) ni.value = user;
-}
-function doSkipAuth() {
-  const el = $('cloud-body');
-  if (el) el.style.display = 'none';
 }
 async function doAuthRegister() {
   const msg = document.getElementById('cloud-msg');
