@@ -1262,38 +1262,43 @@ document.querySelectorAll('.cls').forEach(el => {
   });
 });
 
-if (authToken()) {
-  (async () => {
-    try {
-      const j = await cloudFetch();
-      if (j && j.save_blob && j.save_blob.P) {
-        applyCloudSave(j);
-        $('start-modal').classList.remove('show');
-        render();
-        logHistory = []; restoreLog();
-        log(`<span class="sys">— прогресс синхронизирован с облаком —</span>`);
-      } else if (loadSave() && P) {
-        $('start-modal').classList.remove('show');
-        render(); restoreLog();
-        log(`<span class="sys">— игра загружена из локального сохранения —</span>`);
-        if (inCombat && Es.length) { for (const e of Es) scheduleEnemy(e, true); startCombatLoop(); }
-        cloudSync().catch(()=>{});
+function bootstrapSession() {
+  if (authToken()) {
+    (async () => {
+      try {
+        const j = await cloudFetch();
+        if (j && j.save_blob && j.save_blob.P) {
+          applyCloudSave(j);
+          $('start-modal').classList.remove('show');
+          render();
+          logHistory = []; restoreLog();
+          log(`<span class="sys">— прогресс синхронизирован с облаком —</span>`);
+        } else if (loadSave() && P) {
+          $('start-modal').classList.remove('show');
+          render(); restoreLog();
+          log(`<span class="sys">— игра загружена из локального сохранения —</span>`);
+          if (inCombat && Es.length) { for (const e of Es) scheduleEnemy(e, true); startCombatLoop(); }
+          cloudSync().catch(()=>{});
+        }
+      } catch {
+        if (loadSave() && P) {
+          $('start-modal').classList.remove('show');
+          render(); restoreLog();
+          log(`<span class="sys">— нет связи с облаком, играем офлайн —</span>`);
+          if (inCombat && Es.length) { for (const e of Es) scheduleEnemy(e, true); startCombatLoop(); }
+        }
       }
-    } catch {
-      if (loadSave() && P) {
-        $('start-modal').classList.remove('show');
-        render(); restoreLog();
-        log(`<span class="sys">— нет связи с облаком, играем офлайн —</span>`);
-        if (inCombat && Es.length) { for (const e of Es) scheduleEnemy(e, true); startCombatLoop(); }
-      }
-    }
-  })();
-} else if (loadSave() && P) {
-  $('start-modal').classList.remove('show');
-  render(); restoreLog();
-  if (inCombat && Es.length) { for (const e of Es) scheduleEnemy(e, true); startCombatLoop(); }
+      renderCloudPanel();
+    })();
+  } else if (loadSave() && P) {
+    $('start-modal').classList.remove('show');
+    render(); restoreLog();
+    if (inCombat && Es.length) { for (const e of Es) scheduleEnemy(e, true); startCombatLoop(); }
+    renderCloudPanel();
+  } else {
+    renderCloudPanel();
+  }
 }
-renderCloudPanel();
 
 let leadersTicker = null;
 function startLeadersTicker() {
@@ -3049,6 +3054,8 @@ function die() {
   stopCombatLoop(); inCombat=false; Es=[]; target=0;
   render();
 }
+
+bootstrapSession();
 </script>
 </body>
 </html>
