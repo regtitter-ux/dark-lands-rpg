@@ -347,6 +347,16 @@
     padding: 2px 0;
   }
   .auth-field input::placeholder { color: #6b4423; font-style: italic; }
+  .auth-field input:-webkit-autofill,
+  .auth-field input:-webkit-autofill:hover,
+  .auth-field input:-webkit-autofill:focus,
+  .auth-field input:-webkit-autofill:active {
+    -webkit-text-fill-color: #f4d03f !important;
+    -webkit-box-shadow: 0 0 0 1000px #0f0704 inset !important;
+    box-shadow: 0 0 0 1000px #0f0704 inset !important;
+    caret-color: #f4d03f;
+    transition: background-color 5000s ease-in-out 0s;
+  }
   .auth-actions {
     display: flex; gap: 6px; justify-content: center; margin-top: 10px;
   }
