@@ -1477,7 +1477,13 @@ async function cloudSync() {
     const j = await r.json().catch(()=>({}));
     if (!r.ok) { throw new Error(j.error || 'save failed'); }
     if (P && typeof j.gold === 'number' && j.gold !== P.gold) {
-      if (j.gold < P.gold) log(`<span class="bad">На арене с тебя сняли ${P.gold - j.gold} <img class="gi" src="assets/icons/two-coins.svg" alt=""> пока тебя не было.</span>`);
+      if (j.pvp_loss) {
+        log(`<span class="bad"><img class="gi" src="assets/icons/death-skull.svg" alt=""> Тебя убили на арене — ты потерял ${j.pvp_loss} <img class="gi" src="assets/icons/two-coins.svg" alt="">.</span>`);
+      } else if (j.pvp_gain) {
+        log(`<span class="good"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Добыча с арены: +${j.pvp_gain} <img class="gi" src="assets/icons/two-coins.svg" alt="">.</span>`);
+      } else if (j.gold_clamped) {
+        log(`<span class="sys">Сервер ограничил прирост золота (античит): ${j.gold} <img class="gi" src="assets/icons/two-coins.svg" alt="">.</span>`);
+      }
       P.gold = j.gold|0;
       render();
     }
@@ -2620,6 +2626,68 @@ function syncEsFromArena(players) {
   }
 }
 
+const ARENA_HIT_TPL = [
+  (n,d) => `${n} пробивает защиту и снимает ${d} HP.`,
+  (n,d) => `Клинок ${n} находит щель в броне — ${d} урона.`,
+  (n,d) => `${n} обрушивает удар: ${d} HP как не бывало.`,
+  (n,d) => `${n} достаёт тебя размашистым ударом (${d}).`,
+  (n,d) => `Ты пропускаешь удар от ${n}: ${d} урона.`,
+  (n,d) => `${n} рубит наотмашь — ${d} урона.`,
+  (n,d) => `${n} вгоняет оружие в бок: -${d} HP.`,
+];
+const ARENA_CRIT_TPL = [
+  (n,d) => `КРИТ! ${n} раздирает тебя на ${d} урона!`,
+  (n,d) => `${n} наносит сокрушительный удар — ${d} HP сорвано!`,
+  (n,d) => `${n} бьёт точно в уязвимое место: ${d} урона!`,
+  (n,d) => `Кровавый крит ${n}: ты теряешь ${d} HP!`,
+];
+const ARENA_SPELL_TPL = [
+  (n,s,d) => `${n} обрушивает ${s} — ${d} урона.`,
+  (n,s,d) => `Заклинание ${s} от ${n} выжигает ${d} HP.`,
+  (n,s,d) => `${n} читает ${s}: тебя прошивает на ${d} урона.`,
+  (n,s,d) => `Магия ${n} (${s}) бьёт на ${d} HP.`,
+];
+const ARENA_MISS_TPL = [
+  n => `Удар ${n} свистит мимо — ты уворачиваешься.`,
+  n => `${n} промахивается — везёт.`,
+  n => `Ты уходишь с линии удара ${n}.`,
+  n => `${n} бьёт в пустоту — промах.`,
+];
+const ARENA_SPELL_MISS_TPL = [
+  (n,s) => `${n} пускает ${s}, но чары рассыпаются мимо.`,
+  (n,s) => `${s} от ${n} не находит цель.`,
+  (n,s) => `Ты ускользаешь от ${s} (${n}).`,
+];
+const _arenaHitSeen = new Set();
+function _pickArenaTpl(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function logIncomingArenaHit(ev) {
+  if (!ev || !ev.at) return;
+  const key = `${ev.by||0}:${ev.at}:${ev.kind||''}`;
+  if (_arenaHitSeen.has(key)) return;
+  _arenaHitSeen.add(key);
+  if (_arenaHitSeen.size > 200) _arenaHitSeen.clear();
+  const name = escapeHtml(ev.byName || 'противник');
+  if (ev.kind === 'miss') {
+    if (ev.spell) {
+      const s = SPELLS[ev.spell];
+      const sname = s ? `${s.ico} ${s.name}` : 'заклинание';
+      log(`<span class="info">${_pickArenaTpl(ARENA_SPELL_MISS_TPL)(name, sname)}</span>`);
+    } else {
+      log(`<span class="info">${_pickArenaTpl(ARENA_MISS_TPL)(name)}</span>`);
+    }
+    return;
+  }
+  if (ev.kind === 'spell') {
+    const s = SPELLS[ev.spell];
+    const sname = s ? `${s.ico} ${s.name}` : 'магия';
+    log(`<span class="bad">${_pickArenaTpl(ARENA_SPELL_TPL)(name, sname, ev.dmg|0)}</span>`);
+    return;
+  }
+  // attack
+  if (ev.crit) log(`<span class="epic"><img class="gi" src="assets/icons/star-formation.svg" alt=""> ${_pickArenaTpl(ARENA_CRIT_TPL)(name, ev.dmg|0)}</span>`);
+  else         log(`<span class="bad">${_pickArenaTpl(ARENA_HIT_TPL)(name, ev.dmg|0)}</span>`);
+}
+
 async function pollArenaStateOnce() {
   if (!onArena || !authToken()) return;
   let j;
@@ -2645,6 +2713,9 @@ async function pollArenaStateOnce() {
     P.mp = j.me.mp|0;
     if (typeof j.me.pvp_kills === 'number') P.pvp_kills = j.me.pvp_kills;
     if (j.me.spellCd) P.spellCd = { ...(P.spellCd||{}), ...j.me.spellCd };
+  }
+  if (Array.isArray(j.me?.incoming) && j.me.incoming.length) {
+    for (const ev of j.me.incoming) logIncomingArenaHit(ev);
   }
   syncEsFromArena(j.players || []);
   render();

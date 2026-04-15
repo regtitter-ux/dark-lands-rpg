@@ -489,8 +489,11 @@ app.post('/api/save', auth, async (req, res) => {
     const allowS = allowanceSeconds(prevAt, now);
     const allowMin = allowS / 60;
 
-    // Server-authoritative effective gold = stored + pending PvP transfers.
-    const serverGoldEff = Math.max(0, (prev?.gold|0) + (prev?.pending_gold_delta|0));
+    // Server-authoritative state: stored gold + pending PvP delta (events the client
+    // doesn't yet know about — e.g. they died on arena while offline).
+    const prevStoredGold = prev?.gold|0;
+    const prevPending    = prev?.pending_gold_delta|0;
+    const serverGoldEff  = Math.max(0, prevStoredGold + prevPending);
 
     // --- lvl: monotonic, capped gain rate.
     const clientLvl = Math.max(1, Math.min(MAX_LVL, Math.floor(lvl)));
@@ -510,17 +513,23 @@ app.post('/api/save', auth, async (req, res) => {
     const bossCap = prevBosses + Math.max(BOSS_FLOOR_PER_SAVE, Math.ceil(BOSS_GAIN_PER_MIN * allowMin));
     const safeBosses = Math.min(Math.max(prevBosses, clientBosses), bossCap);
 
-    // --- gold: spend freely (client may have paid inn/shop), cap GAINS by rate×seconds.
+    // --- gold: client reports an absolute value. Interpret as:
+    //   client_delta = clientGold - prev_stored   (positive: earned; negative: spent)
+    //   safeGold = prev_stored + clamp(client_delta) + pending
+    // This preserves PvP pending losses/gains even if the client was unaware of them.
     const clientGold = Math.max(0, Math.min(2_000_000_000, Math.floor(gold)));
     const goldRate = GOLD_GAIN_BASE_PER_SEC + GOLD_GAIN_PER_LVL_PER_SEC * safeLvl;
     const goldGainCap = Math.ceil(goldRate * allowS);
-    let safeGold;
-    if (clientGold <= serverGoldEff) {
-      // decrease: trust (player spent gold somewhere).
-      safeGold = clientGold;
-    } else {
-      safeGold = Math.min(clientGold, serverGoldEff + goldGainCap);
-    }
+    const clientDelta = clientGold - prevStoredGold;
+    let allowedDelta;
+    if (clientDelta <= 0) allowedDelta = clientDelta;      // decreases: trust
+    else allowedDelta = Math.min(clientDelta, goldGainCap); // increases: cap
+    const safeGold = Math.max(0, prevStoredGold + allowedDelta + prevPending);
+    const goldCapClamped = (clientDelta > 0) && (allowedDelta < clientDelta);
+    // pvpLoss: how much server-enforced PvP debit the client didn't know about yet.
+    // Positive = player lost gold; negative = player gained (unlikely, but safe to report).
+    const pvpLoss = (prevPending < 0) ? -prevPending : 0;
+    const pvpGain = (prevPending > 0) ?  prevPending : 0;
 
     const needMigrate = !prev || prev.resources_migrated === false;
     const seedResources = needMigrate ? sanitizeResources(save_blob?.P?.inv || {}) : null;
@@ -570,7 +579,7 @@ app.post('/api/save', auth, async (req, res) => {
     await client.query('COMMIT');
     const row = r.rows[0] || {};
     const clamped = (clientLvl !== safeLvl) || (clientStage !== safeStage) ||
-                    (clientBosses !== safeBosses) || (clientGold !== safeGold) ||
+                    (clientBosses !== safeBosses) || goldCapClamped ||
                     invClamped || questsClamped;
     res.json({
       ok: true,
@@ -582,6 +591,9 @@ app.post('/api/save', auth, async (req, res) => {
       resources: sanitizeResources(row.resources),
       inv: (invClamped && safeBlob?.P?.inv) ? safeBlob.P.inv : undefined,
       quests: (questsClamped && safeBlob?.P?.quests) ? safeBlob.P.quests : undefined,
+      pvp_loss: pvpLoss || undefined,
+      pvp_gain: pvpGain || undefined,
+      gold_clamped: goldCapClamped || undefined,
       clamped: clamped || undefined,
     });
   } catch (e) {
@@ -997,6 +1009,17 @@ function applyDamage(tgt, now, dmg) {
   return dmg;
 }
 
+// Cap per-player event buffer so a laggy client can't let it grow unbounded.
+const INCOMING_BUFFER_MAX = 32;
+function pushIncoming(target, ev) {
+  if (!target) return;
+  if (!target.incoming) target.incoming = [];
+  target.incoming.push(ev);
+  if (target.incoming.length > INCOMING_BUFFER_MAX) {
+    target.incoming.splice(0, target.incoming.length - INCOMING_BUFFER_MAX);
+  }
+}
+
 function arenaPrune() {
   const now = Date.now();
   for (const [id, p] of arena) {
@@ -1149,6 +1172,7 @@ app.post('/api/arena/enter', auth, async (req, res) => {
       lastActionAt: 0, lastStateAt: 0,
       dead: false, killedBy: null, deathAt: 0, _resolving: false,
       pvp_kills: base.pvp_kills|0,
+      incoming: [],
     });
     if (!wasPresent && feedThrottle('enter', uid)) emitFeed(pickTpl(FEED_ENTER)(base.username), uid, null, 'enter');
     res.json({ ok: true });
@@ -1311,6 +1335,7 @@ app.post('/api/arena/action', auth, async (req, res) => {
     tickRegen(tgt, now);
     const dodge = Math.min(0.35, tgt.agi * 0.012);
     if (Math.random() < dodge) {
+      pushIncoming(tgt, { kind:'miss', by: me, byName: self.username, at: now });
       return res.json({ ok: true, attack: { dodged: true, target_id: tid } });
     }
     let dmg = Math.floor(rndF(self.wdmg[0], self.wdmg[1]) + self.str / 2);
@@ -1318,6 +1343,7 @@ app.post('/api/arena/action', auth, async (req, res) => {
     if (crit) dmg = Math.floor(dmg * 1.7);
     dmg = Math.max(1, dmg - Math.floor(tgt.armor / 2));
     tgt.hp = Math.max(0, tgt.hp - dmg);
+    pushIncoming(tgt, { kind:'attack', by: me, byName: self.username, dmg, crit, at: now });
     let kill = null;
     if (tgt.hp <= 0 && claimKill(tgt, me, now)) {
       const r = await resolveKill(me, tid);
@@ -1365,9 +1391,14 @@ app.post('/api/arena/action', auth, async (req, res) => {
       if (target.dead) return;
       tickRegen(target, now);
       const dodge = Math.min(0.35, target.agi * 0.012);
-      if (Math.random() < dodge) { hits.push({ target_id: targetId, dodged: true }); return; }
+      if (Math.random() < dodge) {
+        hits.push({ target_id: targetId, dodged: true });
+        pushIncoming(target, { kind:'miss', by: me, byName: self.username, spell: key, at: now });
+        return;
+      }
       const applied = applyDamage(target, now, dmg);
       const hit = { target_id: targetId, dmg: applied, hp: target.hp, hpMax: target.hpMax };
+      pushIncoming(target, { kind:'spell', by: me, byName: self.username, spell: key, dmg: applied, at: now });
       if (target.hp <= 0 && claimKill(target, me, now)) {
         killedTargets.push(targetId);
         hit.dead = true;
@@ -1421,6 +1452,11 @@ app.get('/api/arena/state', auth, (req, res) => {
     self.lastStateAt = now;
     self.lastSeen = now;
   }
+  let incoming = [];
+  if (self && self.incoming && self.incoming.length) {
+    incoming = self.incoming;
+    self.incoming = [];
+  }
   const meOut = self ? {
     present: true,
     hp: self.hp, hpMax: self.hpMax,
@@ -1431,6 +1467,7 @@ app.get('/api/arena/state', auth, (req, res) => {
     pvp_kills: self.pvp_kills,
     username: self.username,
     spellCd: self.spellCd || {},
+    incoming,
   } : { present: false };
   res.json({ me: meOut, players: arenaListFor(me), now });
 });
