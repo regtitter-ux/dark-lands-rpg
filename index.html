@@ -1219,14 +1219,21 @@ async function newGame() {
     : 'Удалить локальное сохранение и начать заново?';
   if (!(await confirmDialog(msg, { title:'Новая игра', okText:'Удалить и начать', danger:true }))) return;
   if (hasAccount) {
+    const pwd = prompt('Подтвердите удаление — введите пароль:');
+    if (!pwd) return;
     try {
       const r = await fetch(API_BASE + '/api/me', {
         method:'DELETE',
-        headers:{ 'Authorization':'Bearer '+authToken() }
+        headers:{ 'Authorization':'Bearer '+authToken(), 'Content-Type':'application/json' },
+        body: JSON.stringify({ password: pwd })
       });
       if (!r.ok && r.status !== 401) {
         const j = await r.json().catch(()=>({}));
         alert('Не удалось удалить аккаунт: ' + (j.error || r.status));
+        return;
+      }
+      if (r.status === 401) {
+        alert('Неверный пароль — аккаунт не удалён.');
         return;
       }
     } catch {
@@ -1399,6 +1406,21 @@ function cloudNick() { return authUsername(); }
 function statsForSync() {
   if (!P) return null;
   const stageMax = Math.max(1, ...Object.values(P.stages || {1:1}));
+  // Snapshot effective PvP stats so the server uses them as authoritative on /arena/enter.
+  let pvp_stats = null;
+  try {
+    const wd = eff('wdmg') || [4, 8];
+    pvp_stats = {
+      hpMax: eff('hpMax')|0,
+      mpMax: eff('mpMax')|0,
+      str: eff('str')|0,
+      agi: eff('agi')|0,
+      int_: eff('int')|0,
+      armor: eff('armor')|0,
+      crit: ((eff('crit')|0) / 100),
+      wdmg: [wd[0]|0, wd[1]|0],
+    };
+  } catch {}
   return {
     cls: P.cls,
     lvl: P.lvl|0,
@@ -1406,6 +1428,8 @@ function statsForSync() {
     gold: P.gold|0,
     bosses: (P.killedBosses||[]).length,
     save_blob: { P, unlocked },
+    pvp_stats,
+    pvp_spell_lvl: P.spellLvl || {},
   };
 }
 async function authRegister(username, password) {
@@ -1458,6 +1482,13 @@ async function cloudSync() {
       render();
     }
     if (P && typeof j.pvp_kills === 'number') P.pvp_kills = j.pvp_kills|0;
+    // Server may clamp state if the save violates anti-cheat caps.
+    if (P && j.clamped) {
+      if (typeof j.lvl === 'number' && j.lvl < P.lvl) P.lvl = j.lvl|0;
+      if (j.inv && typeof j.inv === 'object') P.inv = j.inv;
+      if (j.quests && typeof j.quests === 'object') P.quests = j.quests;
+      render();
+    }
     if (j && j.resources) { applyServerResources(j.resources); render(); }
     const lb = $('tab-leaders');
     if (lb && lb.style.display !== 'none') fetchLeaderboard();
@@ -2666,7 +2697,8 @@ function leaveArenaBeacon() {
   const tok = authToken();
   if (!tok) return;
   try {
-    navigator.sendBeacon(API_BASE+'/api/arena/leave-beacon?t='+encodeURIComponent(tok));
+    const blob = new Blob([JSON.stringify({ t: tok })], { type: 'application/json' });
+    navigator.sendBeacon(API_BASE+'/api/arena/leave-beacon', blob);
   } catch {}
 }
 window.addEventListener('pagehide', leaveArenaBeacon);
@@ -2700,12 +2732,28 @@ setInterval(async () => {
 async function arena() {
   if (inCombat) return;
   if (!authToken()) { log(`<span class="bad">Чтобы выйти на арену, нужно войти в аккаунт.</span>`); return; }
+  // Force a save first so the server uses current stats/spellLvl as authoritative.
+  try { await cloudSync(); } catch {}
   try {
     const r = await fetch(API_BASE+'/api/arena/enter', {
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken()},
-      body: JSON.stringify({ stats: computeArenaStats(), spellLvl: P.spellLvl || {} })
+      body: JSON.stringify({})
     });
+    if (r.status === 409) {
+      const j = await r.json().catch(()=>({}));
+      if (j.error === 'respawn cooldown') {
+        const s = Math.ceil((j.cd_ms||0)/1000);
+        log(`<span class="bad">Ты только что пал на арене — подожди ещё ~${s}с, прежде чем вернуться.</span>`);
+      } else if (j.error === 'already on arena') {
+        log(`<span class="info">Ты уже на арене.</span>`);
+        onArena = true; pvpMode = true; inCombat = true;
+        startCombatLoop(); startArenaPoll(); pollArenaStateOnce(); render();
+      } else {
+        log(`<span class="bad">Арена недоступна: ${escapeHtml(j.error||'конфликт')}.</span>`);
+      }
+      return;
+    }
     if (!r.ok) throw new Error('HTTP '+r.status);
     await r.json();
   } catch (e) {
