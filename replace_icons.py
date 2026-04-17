@@ -81,7 +81,7 @@ MAP = {
     '\U0001F4A5':   'explosion-rays',
 }
 
-with open('index.html','r',encoding='utf-8') as f:
+with open('server/public/index.html','r',encoding='utf-8') as f:
     t = f.read()
 
 # Replace each emoji with <img> tag.
@@ -122,7 +122,7 @@ CSS = """
 """
 t2 = t2.replace('</style>', CSS + '</style>', 1)
 
-with open('index.html','w',encoding='utf-8') as f:
+with open('server/public/index.html','w',encoding='utf-8') as f:
     f.write(t2)
 
 print('done, len', len(t2))

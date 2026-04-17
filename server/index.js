@@ -4,6 +4,10 @@ import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'node:crypto';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const { Pool } = pg;
 
@@ -124,6 +128,7 @@ app.use(cors({
   credentials: false,
 }));
 app.use(express.json({ limit: '256kb' }));
+app.use(express.static(path.join(__dirname, 'public'), { index: 'index.html', extensions: ['html'] }));
 
 app.get('/health', async (_req, res) => {
   try {

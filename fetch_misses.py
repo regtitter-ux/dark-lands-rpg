@@ -1,7 +1,7 @@
 import urllib.request, os, re, sys, io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-OUT = 'assets/icons'
+OUT = 'server/public/assets/icons'
 CANDIDATES = {
     'cancel':        [('cancel','skoll'),('stop-sign','delapouite'),('broken-shield','lorc'),('broken-bone','lorc'),('crossed-bones','lorc')],
     'heart-plus':    [('heart-bottle','lorc'),('hearts','lorc'),('regeneration','lorc'),('healing','delapouite')],

@@ -1,7 +1,7 @@
 import urllib.request, os, sys, io, re
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-OUT = 'assets/icons'
+OUT = 'server/public/assets/icons'
 os.makedirs(OUT, exist_ok=True)
 
 SLUGS = [
