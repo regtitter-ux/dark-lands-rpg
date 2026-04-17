@@ -9,12 +9,18 @@
       url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.9'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/></svg>");
     color: #d4b483;
     padding: 8px;
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-right: max(8px, env(safe-area-inset-right));
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+    padding-left: max(8px, env(safe-area-inset-left));
     font-size: 14px;
     overflow: hidden;
+    -webkit-text-size-adjust: 100%;
   }
   .frame {
     max-width: 1280px;
     height: calc(100vh - 16px);
+    height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     margin: 0 auto;
     border: 3px double #6b4423;
     background: linear-gradient(180deg, #1a0e08 0%, #0f0805 100%);
@@ -424,3 +430,181 @@
   .lb-num.gold { color:#f4d03f; }
   .lb-num.pvp { color:#cf4030; }
   .lb-num.zero { color:#5a3a20; }
+
+  /* ==================== Mobile adaptation ==================== */
+  /* Убираем "залипший" ховер на touch-устройствах: после тапа
+     iOS/Android оставляют :hover на элементе до следующего тапа,
+     что выглядит как баг. Сносим трансформы/тени на hover там,
+     где указатель грубый или hover не поддерживается. */
+  @media (hover: none), (pointer: coarse) {
+    button.act:hover:not(:disabled),
+    button.small:hover:not(:disabled),
+    button.tiny:hover:not(:disabled),
+    .enemy-card:hover,
+    .esl:hover,
+    .slot-item:hover,
+    .tab:hover,
+    .modal-btn:hover,
+    .auth-btn:hover,
+    .modal .cls:hover,
+    .shop-card button:hover:not(:disabled),
+    .lb-row:hover,
+    .qty-wrap .qty-arrows button:hover,
+    .qty-wrap .max-btn:hover {
+      background: inherit;
+      box-shadow: inherit;
+      border-color: inherit;
+      transform: none;
+      filter: inherit;
+    }
+    /* По умолчанию показываем max-btn без hover, т.к. ховер недоступен */
+    .qty-wrap .max-btn { display: inline-block; }
+  }
+
+  /* Планшеты и узкие десктопы: ужимаем крайние колонки */
+  @media (max-width: 1100px) {
+    .layout { grid-template-columns: 200px 1fr 220px; }
+    header h1 { font-size: 20px; letter-spacing: 2px; }
+    .shop-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* Планшет портрет / большой телефон landscape: 2 колонки.
+     Правая колонка (инвентарь/карта) уезжает вниз под левую+центр. */
+  @media (max-width: 900px) {
+    body {
+      padding: 4px;
+      padding-top: max(4px, env(safe-area-inset-top));
+      padding-right: max(4px, env(safe-area-inset-right));
+      padding-bottom: max(4px, env(safe-area-inset-bottom));
+      padding-left: max(4px, env(safe-area-inset-left));
+      font-size: 14px;
+      overflow: auto;
+    }
+    .frame {
+      max-width: 100%;
+      height: auto;
+      min-height: calc(100dvh - 8px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+      overflow: visible;
+    }
+    .layout {
+      display: flex; flex-direction: column;
+      overflow: visible; min-height: 0;
+    }
+    .col { overflow: visible; padding: 8px; }
+    .col.left, .col.right { border: none; border-top: 1px solid #4a2818; }
+    .col.center { order: -1; padding: 10px 8px; min-height: 0; }
+    .panel.log-panel { min-height: 240px; }
+    .panel.log-panel .body { max-height: 50vh; }
+    .log { min-height: 180px; }
+    .actions { grid-template-columns: repeat(2, 1fr); }
+    .shop-grid { grid-template-columns: repeat(2, 1fr); }
+    .modal { width: 94%; max-height: 88dvh; }
+    .modal-box { min-width: 0; width: 92%; max-width: 460px; }
+    /* На десктопе body overflow: hidden и колонки скроллятся сами;
+       на мобилке делаем нативный скролл документа, иначе iOS
+       теряет swipe-to-refresh и ломает momentum-scroll. */
+  }
+
+  /* Телефон портрет: одна колонка, крупнее шрифт, больше зона касания */
+  @media (max-width: 560px) {
+    body {
+      padding: 0;
+      padding-top: env(safe-area-inset-top);
+      padding-right: env(safe-area-inset-right);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      font-size: 15px;
+    }
+    .frame { border-width: 0; border-top: 2px solid #6b4423; border-bottom: 2px solid #6b4423; }
+    header { padding: 6px 4px; }
+    header h1 { font-size: 17px; letter-spacing: 1px; }
+    header h1 .gi { display: none; } /* меньше визуального шума в узком хедере */
+    header .sub { font-size: 10px; }
+
+    .col, .col.center { padding: 8px 6px; }
+    .panel { margin-bottom: 8px; }
+    .panel h3 { font-size: 13px; padding: 5px 8px; }
+    .panel .body { padding: 6px 8px; }
+
+    /* Touch-friendly targets: минимум 40px высоты */
+    button.act { min-height: 44px; font-size: 14px; padding: 10px 4px; }
+    .tab { padding: 10px 4px; font-size: 13px; min-height: 40px; }
+    button.small { padding: 8px 8px; font-size: 12px; min-height: 34px; }
+    button.tiny { padding: 6px 10px; font-size: 11px; min-height: 30px; }
+    .modal-btn, .auth-btn { padding: 10px 18px; min-height: 40px; }
+    .shop-card button { padding: 8px 14px; min-height: 36px; }
+    .item button { padding: 6px 10px; font-size: 11px; min-height: 30px; }
+    .item { padding: 6px; font-size: 13px; }
+
+    /* Actions: узкий экран — две крупных колонки, читаемый лейбл */
+    .actions { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+
+    /* Бой: противники стоят вертикально чтобы не обрезало имя */
+    .enemies-area { flex-direction: column; gap: 6px; overflow: visible; }
+    .enemy-card { flex-basis: auto !important; padding: 8px; }
+    .enemy-card.dead { padding: 0 !important; }
+    .scene-strip { flex-direction: column; gap: 6px; }
+    .scene-box { padding: 6px 10px; }
+
+    /* Магазин: карточки в одну колонку для читаемости */
+    .shop-grid { grid-template-columns: 1fr; gap: 6px; }
+    .shop-card { flex-direction: row; text-align: left; align-items: center; gap: 10px; padding: 8px; }
+    .shop-card .ico { margin: 0; flex-shrink: 0; }
+    .shop-card > :not(.ico) { text-align: left; }
+    .shop-card button { align-self: stretch; margin-top: 6px; }
+    .shop-header { flex-wrap: wrap; gap: 6px; }
+
+    /* Экипировка: сетка чуть крупнее для пальцев */
+    .equip-grid { grid-template-rows: repeat(5, 52px); gap: 6px; }
+    .esl .gi { width: 30px; height: 30px; }
+    .esl-hero .gi { width: 56px; height: 56px; }
+
+    /* Рейтинг-таблица: ужимаем колонки, прячем наименее важные */
+    .lb-table { font-size: 10px; }
+    .lb-table th, .lb-table td { padding: 4px 1px; }
+
+    /* Модалки занимают почти весь экран */
+    .modal { padding: 14px; max-height: 90dvh; }
+    .modal h2 { font-size: 18px; }
+    .modal .classes { grid-template-columns: 1fr; gap: 6px; }
+    .modal .cls { display: flex; gap: 10px; align-items: center; text-align: left; padding: 10px; }
+    .modal .cls .ico, .modal .cls .nm, .modal .cls .desc { text-align: left; }
+    .modal .cls .ico { flex-shrink: 0; font-size: 28px; }
+    .modal-box { width: 96%; min-width: 0; }
+    .modal-overlay { padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+
+    /* Футер: мельче, переносим ссылки */
+    footer { font-size: 9px; padding: 5px 4px; line-height: 1.4; }
+
+    /* Скрытый scrollbar смотрится аккуратнее в нативном скролле */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+  }
+
+  /* Очень узкие экраны (старые бюджетные смартфоны 320px) */
+  @media (max-width: 360px) {
+    body { font-size: 14px; }
+    header h1 { font-size: 15px; letter-spacing: 0; }
+    .actions { grid-template-columns: 1fr; }
+    .modal-actions { flex-direction: column-reverse; }
+    .modal-btn { width: 100%; }
+  }
+
+  /* Ландшафт на телефоне: низкая высота — сокращаем вертикальные
+     отступы чтобы бой влезал */
+  @media (max-height: 500px) and (orientation: landscape) {
+    header { padding: 4px; }
+    header h1 { font-size: 16px; }
+    header .sub { display: none; }
+    .panel { margin-bottom: 6px; }
+    .panel.log-panel { min-height: 120px; }
+    .log { min-height: 80px; }
+  }
+
+  /* Prefers-reduced-motion: убираем ghost-bar и target-pulse */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
