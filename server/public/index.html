@@ -35,9 +35,11 @@
         <h3><img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt=""> Герой <span class="hero-meta-inline" id="hero-meta"></span></h3>
         <div class="body">
           <div id="equip-body"></div>
-          <div class="bar-row hp"><div class="bar-ico"><img decoding="async" src="assets/icons/hearts.svg" alt="HP"></div><div class="bar hp"><div class="ghost" id="hp-ghost"></div><div class="fill" id="hp-fill"></div><div class="label" id="hp-lbl">100/100</div></div></div>
-          <div class="bar-row mp"><div class="bar-ico"><img decoding="async" src="assets/icons/round-bottom-flask.svg" alt="MP"></div><div class="bar mp"><div class="ghost" id="mp-ghost"></div><div class="fill" id="mp-fill"></div><div class="label" id="mp-lbl">50/50</div></div></div>
-          <div class="bar-row xp"><div class="bar-ico"><img decoding="async" src="assets/icons/star-formation.svg" alt="XP"></div><div class="bar xp"><div class="fill" id="xp-fill"></div><div class="label" id="xp-lbl">0/100</div></div></div>
+          <div id="hero-bars">
+            <div class="bar-row hp"><div class="bar-ico"><img decoding="async" src="assets/icons/hearts.svg" alt="HP"></div><div class="bar hp"><div class="ghost" id="hp-ghost"></div><div class="fill" id="hp-fill"></div><div class="label" id="hp-lbl">100/100</div></div></div>
+            <div class="bar-row mp"><div class="bar-ico"><img decoding="async" src="assets/icons/round-bottom-flask.svg" alt="MP"></div><div class="bar mp"><div class="ghost" id="mp-ghost"></div><div class="fill" id="mp-fill"></div><div class="label" id="mp-lbl">50/50</div></div></div>
+            <div class="bar-row xp"><div class="bar-ico"><img decoding="async" src="assets/icons/star-formation.svg" alt="XP"></div><div class="bar xp"><div class="fill" id="xp-fill"></div><div class="label" id="xp-lbl">0/100</div></div></div>
+          </div>
         </div>
       </div>
       <div class="panel"><h3><img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt=""> Характеристики</h3><div class="body" id="stats-body"></div></div>
@@ -70,7 +72,7 @@
       </div>
       <div id="tab-inv">
         <div class="panel"><h3><img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt=""> Зелья и припасы</h3><div class="body" id="inv-body"></div></div>
-        <div class="panel"><h3><img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt=""> Магия</h3><div class="body" id="spells-body"></div></div>
+        <div class="panel" id="spells-panel"><h3><img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt=""> Магия</h3><div class="body" id="spells-body"></div></div>
         <div class="panel"><h3><img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt=""> Реликвии</h3><div class="body" id="quest-items-body"></div></div>
       </div>
       <div id="tab-map" style="display:none">
@@ -94,6 +96,13 @@
     &nbsp;•&nbsp; <span id="auth-indicator" style="color:#6b4423"></span>
     &nbsp;•&nbsp; иконки: <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a> (<a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>)
   </footer>
+  <nav class="mobile-nav" id="mobile-nav" role="tablist" aria-label="Навигация">
+    <button type="button" class="mnav-btn active" data-page="battle" role="tab" aria-selected="true"><img decoding="async" src="assets/icons/crossed-swords.svg" alt=""><span>Бой</span></button>
+    <button type="button" class="mnav-btn" data-page="hero" role="tab" aria-selected="false"><img decoding="async" src="assets/icons/barbarian.svg" alt=""><span>Герой</span></button>
+    <button type="button" class="mnav-btn" data-page="bag" role="tab" aria-selected="false"><img decoding="async" src="assets/icons/knapsack.svg" alt=""><span>Сумка</span></button>
+    <button type="button" class="mnav-btn" data-page="world" role="tab" aria-selected="false"><img decoding="async" src="assets/icons/treasure-map.svg" alt=""><span>Мир</span></button>
+    <button type="button" class="mnav-btn" data-page="more" role="tab" aria-selected="false"><img decoding="async" src="assets/icons/sparkles.svg" alt=""><span>Ещё</span></button>
+  </nav>
 </div>
 
 <div class="modal-bg show" id="start-modal" onclick="if(event.target===this&&P)closeStartModal()">
@@ -2849,6 +2858,104 @@ function die() {
   stopCombatLoop(); inCombat=false; Es=[]; target=0;
   render();
 }
+
+// ==================== МОБИЛЬНАЯ НАВИГАЦИЯ ====================
+(function mobileNav(){
+  const frame = document.querySelector('.frame');
+  const nav = document.getElementById('mobile-nav');
+  if (!frame || !nav) return;
+
+  const mq = window.matchMedia('(max-width: 900px)');
+  const layout = frame.querySelector('.layout');
+  const colCenter = document.querySelector('.col.center');
+  const leftBody = document.querySelector('.col.left .panel .body');
+  const heroBars = document.getElementById('hero-bars');
+  const spellsPanel = document.getElementById('spells-panel');
+  const invTab = document.getElementById('tab-inv');
+  const actions = document.getElementById('actions');
+
+  // Создаём/находим контейнер "статус-стрипа": всегда видимая полоса
+  // HP/MP/XP под шапкой на мобиле. На десктопе не используется.
+  let statusStrip = document.getElementById('mobile-status');
+  if (!statusStrip) {
+    statusStrip = document.createElement('div');
+    statusStrip.id = 'mobile-status';
+    statusStrip.className = 'mobile-status';
+  }
+
+  let moved = false;
+
+  function toMobile(){
+    if (moved) return;
+    // Статус-стрип между шапкой и .layout — виден на любой вкладке мобилки
+    if (heroBars && layout && layout.parentElement) {
+      statusStrip.appendChild(heroBars);
+      layout.parentElement.insertBefore(statusStrip, layout);
+    }
+    // Магия приклеивается под кнопки действий чтобы кастовать прямо в бою
+    if (spellsPanel && actions) {
+      actions.insertAdjacentElement('afterend', spellsPanel);
+    }
+    moved = true;
+  }
+
+  function toDesktop(){
+    if (!moved) return;
+    if (heroBars && leftBody) {
+      const equipBody = document.getElementById('equip-body');
+      if (equipBody && equipBody.parentElement === leftBody) {
+        equipBody.insertAdjacentElement('afterend', heroBars);
+      } else {
+        leftBody.appendChild(heroBars);
+      }
+    }
+    if (statusStrip.parentElement) statusStrip.parentElement.removeChild(statusStrip);
+    if (spellsPanel && invTab) invTab.appendChild(spellsPanel);
+    moved = false;
+  }
+
+  function apply(){ if (mq.matches) toMobile(); else toDesktop(); }
+
+  // Маршрутизация страниц на мобиле: data-page на .frame управляет видимостью
+  // колонок через CSS, плюс для страницы bag/world/more — какая вкладка активна.
+  const PAGE_TAB = { bag: 'inv', world: 'map', more: 'leaders' };
+  function setPage(page){
+    const valid = ['battle','hero','bag','world','more'];
+    if (!valid.includes(page)) page = 'battle';
+    frame.dataset.page = page;
+    nav.querySelectorAll('.mnav-btn').forEach(b => {
+      const a = b.dataset.page === page;
+      b.classList.toggle('active', a);
+      b.setAttribute('aria-selected', a ? 'true' : 'false');
+    });
+    // Синхронизируем таб в правой колонке если страница требует
+    const tab = PAGE_TAB[page];
+    if (tab) {
+      const t = document.querySelector('.tab[data-tab="'+tab+'"]');
+      if (t && !t.classList.contains('active')) t.click();
+    }
+    // Скроллим к верху контента чтобы не оказаться в середине длинной страницы
+    try { colCenter && (colCenter.scrollTop = 0); } catch {}
+    try { window.scrollTo({ top: 0, behavior: 'auto' }); } catch {}
+  }
+
+  nav.addEventListener('click', e => {
+    const btn = e.target.closest('.mnav-btn');
+    if (!btn) return;
+    setPage(btn.dataset.page);
+  });
+
+  // Если пользователь в магазине — переводим на страницу боя чтобы увидеть модалку
+  const openShopOrig = window.openShop;
+  if (typeof openShopOrig === 'function') {
+    window.openShop = function(){ if (mq.matches) setPage('battle'); return openShopOrig.apply(this, arguments); };
+  }
+
+  if (mq.addEventListener) mq.addEventListener('change', apply);
+  else if (mq.addListener) mq.addListener(apply);
+  apply();
+  if (!frame.dataset.page) frame.dataset.page = 'battle';
+})();
 
 bootstrapSession();
 </script>

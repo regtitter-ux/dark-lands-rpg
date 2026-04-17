@@ -600,6 +600,149 @@
     .log { min-height: 80px; }
   }
 
+  /* ==================== Мобильная нижняя навигация ==================== */
+  /* По умолчанию скрыта. Видна только на брейкпоинте 900px и уже.
+     Роутер на data-page на .frame переключает видимость колонок. */
+  .mobile-nav { display: none; }
+
+  @media (max-width: 900px) {
+    /* Нижняя панель — fixed, чтобы не уезжала со страницей */
+    .mobile-nav {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      position: fixed; left: 0; right: 0; bottom: 0;
+      z-index: 50;
+      background: linear-gradient(180deg, #2a1810 0%, #0f0805 100%);
+      border-top: 2px solid #6b4423;
+      box-shadow: 0 -4px 14px rgba(0,0,0,0.7);
+      padding: 4px 4px max(4px, env(safe-area-inset-bottom));
+      gap: 2px;
+    }
+    .mnav-btn {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 2px;
+      background: transparent; border: 1px solid transparent;
+      color: #8b6f47; font-family: 'MedievalSharp', cursive; font-size: 10px;
+      padding: 6px 2px; min-height: 48px; cursor: pointer;
+      letter-spacing: 0.5px; text-transform: uppercase;
+    }
+    .mnav-btn img { width: 22px; height: 22px; opacity: 0.7; filter: drop-shadow(0 1px 0 #000); }
+    .mnav-btn.active {
+      color: #f4d03f;
+      background: linear-gradient(180deg, rgba(107,68,35,0.5), rgba(58,32,16,0.5));
+      border-color: #6b4423;
+      text-shadow: 1px 1px 0 #000;
+    }
+    .mnav-btn.active img { opacity: 1; }
+
+    /* Отступ снизу чтобы контент не прятался под панелью */
+    body { padding-bottom: calc(56px + max(4px, env(safe-area-inset-bottom))); }
+    .frame { min-height: calc(100dvh - 8px - 56px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+
+    /* Роутер страниц — видима только одна колонка за раз */
+    .frame[data-page] .col { display: none; }
+    .frame[data-page="battle"] .col.center { display: flex; }
+    .frame[data-page="hero"]   .col.left   { display: block; }
+    .frame[data-page="bag"]    .col.right  { display: block; }
+    .frame[data-page="world"]  .col.right  { display: block; }
+    .frame[data-page="more"]   .col.right  { display: block; }
+    /* Видимый таб в правой колонке на bag/world/more управляется JS
+       через inline display (clickHandler выставляет активному block,
+       остальным none). Ниже лишь подкручиваем отображение tabs-полосы. */
+    .frame[data-page="bag"]   .col.right .tabs,
+    .frame[data-page="world"] .col.right .tabs,
+    .frame[data-page="more"]  .col.right .tabs { display: flex; }
+
+    /* Порядок детей .col.center на мобиле:
+       1) Сцена + враги
+       2) Действия
+       3) Магия (перенесена JS)
+       4) Лог
+       Используем flex order. */
+    .col.center { display: flex; flex-direction: column; overflow: visible; padding: 8px 6px; }
+    .col.center > .center-top       { order: 1; }
+    .col.center > .actions          { order: 2; margin-top: 8px; }
+    .col.center > #spells-panel     { order: 3; margin-top: 8px; margin-bottom: 0; }
+    .col.center > .panel.log-panel  { order: 4; margin-top: 8px; flex: 0 1 auto; min-height: 200px; }
+    .col.center > .panel.log-panel .body { max-height: 38vh; }
+
+    /* Статус-стрип: HP/MP/XP всегда видны под шапкой на любой мобильной странице */
+    .mobile-status {
+      background: linear-gradient(180deg, rgba(40,20,10,0.9), rgba(20,10,5,0.9));
+      border-bottom: 1px solid #4a2818;
+      padding: 6px 8px;
+      flex-shrink: 0;
+    }
+    .mobile-status #hero-bars { display: flex; flex-direction: column; gap: 3px; }
+    .mobile-status .bar-row { margin: 0; }
+    .mobile-status .bar-row .bar { height: 16px; }
+    .mobile-status .bar-row .bar .label { font-size: 11px; }
+    .mobile-status .bar-row .bar-ico { width: 18px; height: 18px; }
+    .mobile-status .bar-row .bar-ico img { width: 11px; height: 11px; }
+
+    /* Панель магии на мобиле — компактнее, одна строка на заклинание */
+    #spells-panel .body { padding: 4px 6px; }
+    #spells-panel .item { padding: 6px; font-size: 13px; }
+    #spells-panel .item .nm { font-size: 12px; }
+    #spells-panel .item button.tiny { font-size: 11px; padding: 6px 10px; min-height: 32px; min-width: 54px; }
+
+    /* Карточки врагов — крупнее портрет, толще HP бар, явно видно цель */
+    .enemy-card { padding: 10px; gap: 10px; border-width: 2px; }
+    .enemy-card.dead { padding: 0 !important; gap: 0 !important; }
+    .enemy-card .portrait { font-size: 48px; }
+    .enemy-card .portrait img, .enemy-card .portrait .gi { width: 48px !important; height: 48px !important; }
+    .enemy-card .name { font-size: 15px; white-space: normal; }
+    .enemy-card .lvl { font-size: 12px; }
+    .enemy-card .bar { height: 18px; }
+    .enemy-card .bar .label { font-size: 12px; line-height: 18px; }
+    .enemy-card.target { outline: 2px solid #f4d03f; outline-offset: -4px; }
+
+    /* Магазин — крупная шапка с фиксированным низом кнопки */
+    .shop-header {
+      position: sticky; top: 0; z-index: 3;
+      background: linear-gradient(180deg, #2a1810, #1a0e08);
+      padding: 8px 6px; margin: -14px -14px 8px;
+      border-bottom: 1px solid #6b4423;
+    }
+    .shop-header h2 { font-size: 16px !important; }
+    .shop-header .close { min-height: 40px; padding: 8px 14px; font-size: 12px; }
+    .shop-header .gold { font-size: 14px; }
+    .shop-tabs { position: sticky; top: 56px; z-index: 2; background: #1a0e08; padding-top: 4px; margin: 0 -6px 6px; }
+    .shop-card { padding: 10px; }
+    .shop-card .nm { font-size: 14px; }
+    .shop-card .desc { font-size: 12px; color: #8b6f47; }
+    .shop-card .price { font-size: 13px; }
+    .shop-card button { min-height: 40px; font-size: 13px; }
+
+    /* Вкладки правой колонки — крупнее чтобы попасть пальцем */
+    .col.right .tabs .tab { padding: 12px 4px; font-size: 13px; min-height: 44px; }
+
+    /* На странице "Ещё" показываем квесты+рейтинг друг под другом */
+    .frame[data-page="more"] .col.right #tab-quest,
+    .frame[data-page="more"] .col.right #tab-leaders { display: block !important; }
+    .frame[data-page="more"] .col.right #tab-inv,
+    .frame[data-page="more"] .col.right #tab-map { display: none !important; }
+
+    /* Герой: equip-сетка может быть компактной чтобы всё влезло */
+    .frame[data-page="hero"] .col.left { padding: 10px 8px; }
+  }
+
+  /* На узком телефоне — уменьшаем иконки нав-панели */
+  @media (max-width: 360px) {
+    .mnav-btn { font-size: 9px; padding: 4px 2px; min-height: 44px; }
+    .mnav-btn img { width: 18px; height: 18px; }
+    .mobile-nav { padding: 2px 2px max(2px, env(safe-area-inset-bottom)); }
+    body { padding-bottom: calc(50px + max(2px, env(safe-area-inset-bottom))); }
+  }
+
+  /* Ландшафт на телефоне: нижняя нав — компактнее */
+  @media (max-height: 500px) and (orientation: landscape) and (max-width: 900px) {
+    .mnav-btn { min-height: 38px; padding: 2px; font-size: 9px; }
+    .mnav-btn img { width: 16px; height: 16px; }
+    .mobile-nav { padding: 2px; }
+    body { padding-bottom: calc(44px + max(2px, env(safe-area-inset-bottom))); }
+  }
+
   /* Prefers-reduced-motion: убираем ghost-bar и target-pulse */
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
