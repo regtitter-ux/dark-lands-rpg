@@ -1,0 +1,10 @@
+<h1>Город</h1>
+<p>Герой <b><%= it.me.username %></b><% if (it.me.cls) { %> · <%= it.me.cls %><% } %></p>
+<p class="stat">Уровень <b><%= it.me.lvl || 1 %></b></p>
+<p class="stat">Этап <b><%= it.me.stage_max || 1 %></b></p>
+<p class="stat">Золото <b><%= it.me.gold || 0 %></b></p>
+<p class="stat">Боссы <b><%= it.me.bosses || 0 %></b></p>
+<p class="stat">PvP-убийства <b><%= it.me.pvp_kills || 0 %></b></p>
+<p class="stat">Ресурсов всего <b><%= it.totalRes %></b></p>
+<hr/>
+<%~ include('_nav', it) %>

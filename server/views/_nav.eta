@@ -1,0 +1,15 @@
+<div class="nav">
+<ol class="menu">
+<li><a href="<%= it.url('/city') %>" accesskey="1">1. В город</a></li>
+<li><a href="<%= it.url('/inventory') %>" accesskey="2">2. Инвентарь</a></li>
+<li><a href="<%= it.url('/market') %>" accesskey="3">3. Рынок</a></li>
+<li><a href="<%= it.url('/arena') %>" accesskey="4">4. Арена</a></li>
+<li><a href="<%= it.url('/leaderboard') %>" accesskey="5">5. Таблица</a></li>
+</ol>
+<% if (it.session) { %>
+<form method="post" action="<%= it.url('/lite/logout') %>" class="logout-form">
+<input type="hidden" name="_csrf" value="<%= it.csrf() %>"/>
+<button type="submit" class="btn" accesskey="9">9. Выход (<%= it.session.username %>)</button>
+</form>
+<% } %>
+</div>

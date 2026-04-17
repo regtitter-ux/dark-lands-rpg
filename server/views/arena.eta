@@ -1,0 +1,37 @@
+<h1>Арена</h1>
+<% if (it.err) { %><p class="err"><%= it.err %></p><% } %>
+<% if (it.ok) { %><p class="ok">Готово.</p><% } %>
+
+<% if (it.dead) { %>
+<p class="err">Вы убиты. Ждите возрождения.</p>
+<p class="stat">Осталось <b><%= Math.ceil(it.respawnMs / 1000) %> сек.</b></p>
+<% } else if (it.respawnMs > 0) { %>
+<p class="stat">Возрождение через <b><%= Math.ceil(it.respawnMs / 1000) %> сек.</b></p>
+<% } else { %>
+<p>На арене сейчас: <b><%= it.arenaCount %></b></p>
+<form method="post" action="<%= it.url('/lite/arena/enter') %>">
+<input type="hidden" name="_csrf" value="<%= it.csrf() %>"/>
+<p><button type="submit" class="btn" accesskey="1">1. Войти на арену</button></p>
+</form>
+<% } %>
+
+<% if (it.players && it.players.length) { %>
+<h2>Бойцы</h2>
+<table>
+<tr><th>#</th><th>Ник</th><th>Кл.</th><th>Ур.</th><th>HP</th></tr>
+<% it.players.forEach((p, i) => { %>
+<tr>
+<td><%= i + 1 %></td>
+<td><b><%= p.username %></b></td>
+<td><%= p.cls || '—' %></td>
+<td><%= p.lvl %></td>
+<td><%= p.hp %>/<%= p.hpMax %><% if (p.dead) { %> ×<% } %></td>
+</tr>
+<% }) %>
+</table>
+<% } else { %>
+<p class="muted">Пока никого нет.</p>
+<% } %>
+
+<hr/>
+<%~ include('_nav', it) %>

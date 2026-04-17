@@ -3,439 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <title>Сумрачные Земли — браузерная РПГ</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=MedievalSharp&family=PT+Serif:wght@400;700&display=swap');
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { height: 100%; }
-  body {
-    font-family: 'PT Serif', Georgia, serif;
-    background:
-      radial-gradient(ellipse at top, #2a1810 0%, #0d0604 70%),
-      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.9'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/></svg>");
-    color: #d4b483;
-    padding: 8px;
-    font-size: 14px;
-    overflow: hidden;
-  }
-  .frame {
-    max-width: 1280px;
-    height: calc(100vh - 16px);
-    margin: 0 auto;
-    border: 3px double #6b4423;
-    background: linear-gradient(180deg, #1a0e08 0%, #0f0805 100%);
-    box-shadow: 0 0 40px rgba(0,0,0,0.9), inset 0 0 30px rgba(107,68,35,0.2);
-    display: flex; flex-direction: column; overflow: hidden;
-  }
-  header {
-    text-align: center; padding: 8px;
-    border-bottom: 2px solid #6b4423;
-    background: linear-gradient(90deg, #2a1810, #4a2818, #2a1810);
-    flex-shrink: 0;
-  }
-  header h1 { font-family: 'MedievalSharp', cursive; font-size: 24px; color: #f4d03f; text-shadow: 0 0 10px rgba(244,208,63,0.5), 2px 2px 0 #000; letter-spacing: 3px; }
-  header .sub { font-size: 11px; color: #8b6f47; font-style: italic; margin-top: 2px; }
-
-  .layout { display: grid; grid-template-columns: 240px 1fr 260px; gap: 0; flex: 1; min-height: 0; overflow: hidden; }
-  .col { padding: 10px; overflow-y: auto; }
-  .col.left, .col.right { background: rgba(0,0,0,0.3); border-left: 1px solid #4a2818; border-right: 1px solid #4a2818; }
-  .col.center { padding: 12px; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
-
-  .panel {
-    border: 1px solid #6b4423;
-    background: linear-gradient(180deg, rgba(40,20,10,0.6), rgba(20,10,5,0.6));
-    margin-bottom: 10px;
-    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
-  }
-  .panel h3 {
-    font-family: 'MedievalSharp', cursive;
-    background: linear-gradient(90deg, #4a2818, #6b4423, #4a2818);
-    color: #f4d03f; padding: 6px 10px; font-size: 14px;
-    letter-spacing: 1px; border-bottom: 1px solid #6b4423; text-shadow: 1px 1px 0 #000;
-  }
-  .panel .body { padding: 8px 10px; }
-
-  .stat-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dotted #4a2818; font-size: 13px; }
-  .stat-row:last-child { border-bottom: none; }
-  .stat-row span:last-child { color: #f4d03f; font-weight: bold; }
-  .stat-row .bonus { color: #6abe30; font-size: 11px; margin-left: 4px; }
-
-  .bar-row { display: flex; align-items: center; gap: 6px; margin: 5px 0; }
-  .bar-row .bar-ico {
-    flex-shrink: 0; width: 22px; height: 22px;
-    display: flex; align-items: center; justify-content: center;
-    border: 1px solid #6b4423;
-    background: radial-gradient(circle at 30% 30%, #3a2010, #1a0e08);
-    box-shadow: inset 0 0 4px rgba(0,0,0,0.8), 0 0 2px rgba(244,208,63,0.15);
-  }
-  .bar-row .bar-ico img { width: 14px; height: 14px; }
-  .bar-row.hp .bar-ico img { filter: brightness(0) saturate(100%) invert(45%) sepia(82%) saturate(3000%) hue-rotate(340deg) brightness(90%) contrast(95%); }
-  .bar-row.mp .bar-ico img { filter: brightness(0) saturate(100%) invert(68%) sepia(30%) saturate(800%) hue-rotate(165deg) brightness(95%) contrast(90%); }
-  .bar-row.xp .bar-ico img { filter: brightness(0) saturate(100%) invert(85%) sepia(50%) saturate(600%) hue-rotate(5deg) brightness(100%) contrast(95%); }
-  .bar { position: relative; flex: 1; height: 20px; background: #0a0503; border: 1px solid #6b4423; overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.9), inset 0 -1px 0 rgba(107,68,35,0.3); }
-  .bar .ghost { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: #f4d03f; opacity: 0.55; transition: width 0.55s ease-out 0.25s; z-index: 0; }
-  .bar .fill { position: relative; height: 100%; transition: width 0.12s linear; z-index: 1; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -2px 3px rgba(0,0,0,0.4); }
-  .bar .fill::after {
-    content: ''; position: absolute; left: 0; right: 0; top: 0; height: 45%;
-    background: linear-gradient(180deg, rgba(255,255,255,0.25), rgba(255,255,255,0));
-    pointer-events: none;
-  }
-  .bar .label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #f4e4b8; text-shadow: 1px 1px 0 #000, 0 0 3px #000; font-weight: bold; letter-spacing: 0.5px; z-index: 2; }
-  .bar.hp .fill { background: linear-gradient(180deg, #e84040 0%, #c02020 50%, #7a1010 100%); }
-  .bar.hp .ghost { background: #f4e06a; }
-  .bar.hp .bar-ico { border-color: #8b3020; }
-  .bar.mp .fill { background: linear-gradient(180deg, #5a9de8 0%, #2a5fbb 50%, #152f6a 100%); }
-  .bar.mp .bar-ico { border-color: #3a6dd1; }
-  .bar.xp .fill { background: linear-gradient(180deg, #ffe060 0%, #d4a020 50%, #6b4423 100%); }
-  .bar.xp .bar-ico { border-color: #8b6f47; }
-
-  .log { flex: 1; min-height: 120px; overflow-y: auto; border: 2px inset #4a2818; background: #0a0503; padding: 10px; font-size: 13px; line-height: 1.6; }
-  .log p { margin-bottom: 4px; }
-  .log .sys { color: #8b6f47; font-style: italic; }
-  .log .good { color: #6abe30; }
-  .log .bad { color: #d12626; }
-  .log .gold { color: #f4d03f; }
-  .log .magic { color: #b97aff; }
-  .log .info { color: #5fb3d4; }
-  .log .epic { color: #ff8c00; font-weight: bold; }
-  .log .quest { color: #f4d03f; }
-  .log hr { border: none; border-top: 1px dashed #4a2818; margin: 6px 0; }
-  .center-top { flex-shrink: 0; }
-  .panel.log-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; margin-bottom: 8px; }
-  .panel.log-panel .body { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 6px; }
-  .actions { flex-shrink: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
-
-  button.act {
-    font-family: 'MedievalSharp', cursive;
-    background: linear-gradient(180deg, #6b4423, #3a2010);
-    color: #f4d03f; border: 2px outset #8b6f47; padding: 10px 6px;
-    cursor: pointer; font-size: 13px; letter-spacing: 1px; text-shadow: 1px 1px 0 #000;
-    transition: all 0.15s;
-  }
-  button.act:hover:not(:disabled) { background: linear-gradient(180deg, #8b5a2b, #4a2818); box-shadow: 0 0 8px rgba(244,208,63,0.5); }
-  button.act:active:not(:disabled) { border-style: inset; transform: translateY(1px); }
-  button.act:disabled { opacity: 0.4; cursor: not-allowed; }
-  button.small {
-    font-family: 'PT Serif', serif; font-size: 11px; padding: 4px 6px;
-    background: linear-gradient(180deg, #4a2818, #2a1810);
-    border: 1px outset #6b4423; color: #d4b483; cursor: pointer;
-    margin: 2px 0; width: 100%; text-align: left;
-  }
-  button.small:hover:not(:disabled) { background: linear-gradient(180deg, #6b4423, #3a2010); color: #f4d03f; }
-  button.small:disabled { opacity: 0.4; cursor: not-allowed; }
-  button.tiny { font-size: 10px; padding: 2px 6px; cursor: pointer; background: linear-gradient(180deg, #6b4423, #3a2010); color: #f4d03f; border: 1px outset #8b6f47; font-family: 'PT Serif', serif; }
-  button.tiny:hover:not(:disabled) { background: linear-gradient(180deg, #8b5a2b, #4a2818); }
-  button.tiny:disabled { opacity: 0.4; cursor: not-allowed; }
-
-  .scene-strip { display: flex; gap: 8px; align-items: stretch; margin-bottom: 8px; }
-  .scene-box { flex: 1; display: flex; gap: 10px; align-items: center; padding: 8px 12px; border: 2px ridge #6b4423; background: radial-gradient(ellipse, #1a0e08, #0a0503); }
-  .scene-box .ico { font-size: 42px; line-height: 1; }
-  .scene-box .txt { flex: 1; }
-  .scene-box .nm { font-family: 'MedievalSharp', cursive; font-size: 16px; color: #f4d03f; text-shadow: 1px 1px 0 #000; }
-  .scene-box .ds { font-style: italic; color: #8b6f47; font-size: 11px; }
-
-  .enemies-area { flex: 1.4; display: flex; gap: 0; min-width: 0; overflow: hidden; }
-
-  .stage-bar { display: flex; align-items: center; gap: 0; padding: 4px 10px; margin-top: 6px; background: linear-gradient(180deg, #1a0e08, #0a0503); border: 2px ridge #6b4423; border-radius: 4px; }
-  .stage-bar .label { font-family: 'MedievalSharp', cursive; color: #d4b87a; font-size: 11px; margin-right: 8px; white-space: nowrap; text-shadow: 1px 1px 0 #000; }
-  .stage-chk { position: relative; width: 20px; height: 20px; border-radius: 50%; background: #2a1810; border: 2px solid #4a2818; color: #8b6f47; font-family: 'MedievalSharp', cursive; font-size: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s; line-height: 1; }
-  .stage-chk.done { background: radial-gradient(ellipse, #3d5a2a, #1a2a10); border-color: #6abe30; color: #d4e9b0; }
-  .stage-chk.cur { background: radial-gradient(ellipse, #8b6f2a, #3d2a0a); border-color: #f4d03f; color: #fff; box-shadow: 0 0 10px rgba(244,208,63,0.8); transform: scale(1.2); z-index: 2; }
-  .stage-chk.boss { background: radial-gradient(ellipse, #5a1a1a, #2a0505); border-color: #d04040; color: #f4a040; font-weight: bold; box-shadow: 0 0 5px rgba(208,64,64,0.5); }
-  .stage-chk.boss.done { background: radial-gradient(ellipse, #6a4a0a, #2a1a00); border-color: #f4c040; color: #ffdc80; }
-  .stage-chk.boss.cur { background: radial-gradient(ellipse, #a02020, #4a0a0a); border-color: #ff6060; color: #fff; box-shadow: 0 0 14px rgba(255,80,80,0.9); }
-  .stage-link { flex: 1; height: 3px; background: #4a2818; min-width: 6px; position: relative; overflow: hidden; border-radius: 2px; }
-  .stage-link .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: linear-gradient(90deg, #6abe30, #f4d03f); transition: width 0.35s ease-out; box-shadow: 0 0 6px rgba(244,208,63,0.5); }
-  .enemy-card { flex: 0 0 60%; min-width: 0; display: flex; gap: 8px; align-items: center; padding: 5px 8px; border: 2px solid #8b0000; background: radial-gradient(ellipse at center, #2a0a0a, #0a0303); box-shadow: 0 0 14px rgba(139,0,0,0.4); cursor: pointer; transition: margin 0.35s ease, flex-basis 0.35s ease, opacity 0.35s ease, border-color 0.15s, box-shadow 0.15s, filter 0.35s; position: relative; box-sizing: border-box; }
-  .enemy-card:hover { border-color: #ff6b6b; box-shadow: 0 0 20px rgba(255,80,80,0.6); }
-  .enemy-card.target { border-color: #f4d03f; box-shadow: 0 0 22px rgba(244,208,63,0.7); animation: targetPulse 1.4s infinite; }
-  .enemy-card.dead { flex-basis: 0 !important; margin: 0 !important; padding: 0; border-width: 0; opacity: 0; pointer-events: none; overflow: hidden; filter: grayscale(1); }
-  .enemy-card.dead::after { content: ''; position: absolute; inset: 0; background: url('assets/icons/death-skull.svg') center/36px 36px no-repeat; filter: drop-shadow(0 0 6px #000); }
-  @keyframes targetPulse { 50% { box-shadow: 0 0 28px rgba(244,208,63,1); } }
-  .enemy-card .portrait { font-size: 36px; line-height: 1; filter: drop-shadow(0 0 6px rgba(255,80,80,0.6)); flex-shrink: 0; }
-  .enemy-card .info { flex: 1; min-width: 0; }
-  .enemy-card .name { font-family: 'MedievalSharp', cursive; font-size: 13px; color: #ff6b6b; text-shadow: 1px 1px 0 #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .enemy-card .lvl { font-size: 10px; color: #8b6f47; }
-  .enemy-card .bar { height: 12px; }
-  .enemy-card .bar .label { font-size: 10px; line-height: 12px; }
-
-  .tabs { display: flex; border-bottom: 2px solid #6b4423; margin-bottom: 8px; }
-  .tab { flex: 1; text-align: center; padding: 6px; cursor: pointer; background: linear-gradient(180deg, #2a1810, #1a0e08); color: #8b6f47; border: 1px solid #4a2818; font-family: 'MedievalSharp', cursive; font-size: 12px; position: relative; }
-  .tab.active { background: linear-gradient(180deg, #6b4423, #4a2818); color: #f4d03f; text-shadow: 1px 1px 0 #000; }
-  .tab .badge { position: absolute; top: -2px; right: 4px; background: #d12626; color: #fff; border-radius: 8px; padding: 0 4px; font-size: 9px; font-family: 'PT Serif', serif; min-width: 14px; }
-
-  .item { display: flex; justify-content: space-between; padding: 4px 6px; border-bottom: 1px dotted #4a2818; font-size: 12px; align-items: center; }
-  .item .ico { width: 20px; text-align: center; }
-  .item .nm { flex: 1; padding: 0 6px; }
-  .item .qty { color: #f4d03f; }
-  .item button { font-size: 10px; padding: 2px 6px; margin-left: 4px; }
-
-  .equip-slot { display: flex; align-items: center; gap: 6px; padding: 4px; border: 1px solid #4a2818; margin-bottom: 4px; background: rgba(0,0,0,0.3); }
-  .equip-slot .ico { font-size: 22px; width: 26px; text-align: center; }
-  .equip-slot .info { flex: 1; min-width: 0; font-size: 11px; }
-  .equip-slot .info .nm { color: #f4d03f; }
-  .equip-slot .info .ds { color: #8b6f47; font-size: 10px; }
-  .equip-slot .empty { color: #4a2818; font-style: italic; }
-  .equip-grid { display: grid; grid-template-columns: 1fr 1.4fr 1fr; grid-template-rows: repeat(5, 44px); gap: 4px; }
-  .esl { position: relative; border: 2px solid #6b4423; background: radial-gradient(ellipse, #2a1810, #0a0503); display:flex; align-items:center; justify-content:center; cursor:pointer; transition: border-color 0.15s, box-shadow 0.15s; min-width: 0; }
-  .esl:hover { border-color: #f4d03f; box-shadow: 0 0 8px rgba(244,208,63,0.5); }
-  .esl.empty .slot-ph { opacity: 0.35; filter: brightness(0) saturate(100%) invert(27%) sepia(15%) saturate(1200%) hue-rotate(350deg) brightness(95%) contrast(85%); }
-  .esl .ench { position: absolute; top: -3px; right: 2px; font-size: 10px; color: #f4d03f; text-shadow: 1px 1px 0 #000, 0 0 3px #000; font-weight: bold; line-height:1; }
-  .esl .gi { width: 26px; height: 26px; }
-  .esl-hero { grid-column: 2; grid-row: 1 / span 3; flex-direction: column; padding: 4px 2px; gap: 2px; }
-  .esl-hero .gi { width: 64px; height: 64px; filter: brightness(0) saturate(100%) invert(86%) sepia(22%) saturate(1160%) hue-rotate(3deg) brightness(101%) contrast(93%) drop-shadow(0 0 6px rgba(244,208,63,0.5)); }
-  .hero-meta-inline { font-family: 'Georgia', serif; font-size: 11px; color: #d4b87a; font-weight: normal; letter-spacing: 0; text-shadow: 1px 1px 0 #000; margin-left: 8px; opacity: 0.9; }
-  .slot-item { padding: 8px; border: 1px solid #6b4423; cursor: pointer; transition: all 0.15s; display:flex; gap:10px; align-items:center; margin-bottom: 4px; background: rgba(0,0,0,0.25); }
-  .slot-item:hover { border-color: #f4d03f; background: rgba(244,208,63,0.08); }
-  .slot-item .gi { width: 28px; height: 28px; }
-
-  .quest-card { border: 1px solid #6b4423; background: rgba(0,0,0,0.4); padding: 6px 8px; margin-bottom: 6px; font-size: 12px; }
-  .quest-card .title { font-family: 'MedievalSharp', cursive; color: #f4d03f; font-size: 13px; text-shadow: 1px 1px 0 #000; }
-  .quest-card .desc { color: #8b6f47; font-style: italic; margin: 3px 0; font-size: 11px; }
-  .quest-card .progress { color: #5fb3d4; font-size: 11px; }
-  .quest-card .reward { color: #6abe30; font-size: 11px; }
-  .quest-card.done { border-color: #6abe30; box-shadow: 0 0 6px rgba(106,190,48,0.3); }
-  .quest-card.completed { opacity: 0.5; }
-  .quest-card.completed .title { color: #6abe30; }
-
-  ::-webkit-scrollbar { width: 10px; }
-  ::-webkit-scrollbar-track { background: #1a0e08; }
-  ::-webkit-scrollbar-thumb { background: #6b4423; border: 1px solid #4a2818; }
-
-  footer { text-align: center; padding: 6px; border-top: 2px solid #6b4423; font-size: 10px; color: #6b4423; font-style: italic; flex-shrink: 0; }
-  footer a { color: #8b6f47; }
-
-  /* scrollbar под интерфейс */
-  * { scrollbar-width: thin; scrollbar-color: #6b4423 #1a0e08; }
-  ::-webkit-scrollbar { width: 12px; height: 12px; }
-  ::-webkit-scrollbar-track { background: #1a0e08; border-left: 1px solid #4a2818; }
-  ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #6b4423, #4a2818); border: 1px solid #2a1810; }
-  ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #8b6f47, #6b4423); }
-  ::-webkit-scrollbar-corner { background: #1a0e08; }
-
-  /* числовой инпут без нативных стрелок */
-  input[type=number]::-webkit-inner-spin-button,
-  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-  input[type=number] { -moz-appearance: textfield; appearance: textfield; }
-  input:focus, button:focus, select:focus { outline: none; border-color: #f4d03f; box-shadow: 0 0 6px rgba(244,208,63,0.5); }
-
-  /* счётчик с кастомными стрелками и кнопкой "Макс" на ховере */
-  .qty-wrap { position: relative; display: inline-flex; align-items: stretch; vertical-align: middle; }
-  .qty-wrap input { border-right: none !important; text-align: center; }
-  .qty-wrap .qty-arrows { display: flex; flex-direction: column; border: 1px solid #6b4423; border-left: none; background: linear-gradient(180deg, #2a1810, #1a0e08); }
-  .qty-wrap .qty-arrows button {
-    font-family: inherit; font-size: 8px; line-height: 1; padding: 0 4px; min-height: 10px; flex: 1;
-    background: linear-gradient(180deg, #4a2818, #2a1810); color: #f4d03f;
-    border: none; border-bottom: 1px solid #6b4423; cursor: pointer;
-  }
-  .qty-wrap .qty-arrows button:last-child { border-bottom: none; }
-  .qty-wrap .qty-arrows button:hover { background: linear-gradient(180deg, #6b4423, #4a2818); }
-  .qty-wrap .qty-arrows button:focus { box-shadow: none; }
-  .qty-wrap .max-btn {
-    display: none; position: absolute; left: 50%; top: 100%; transform: translateX(-50%);
-    margin-top: 3px; white-space: nowrap; font-family: inherit; font-size: 10px;
-    background: linear-gradient(180deg, #4a2818, #2a1810); color: #f4d03f;
-    border: 1px solid #6b4423; padding: 2px 6px; cursor: pointer; z-index: 5;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.6);
-  }
-  .qty-wrap:hover .max-btn, .qty-wrap:focus-within .max-btn { display: inline-block; }
-  .qty-wrap .max-btn:hover { background: linear-gradient(180deg, #6b4423, #4a2818); border-color: #f4d03f; }
-
-  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; z-index: 100; }
-  .modal-bg.show { display: flex; }
-  .modal { background: linear-gradient(180deg, #2a1810, #1a0e08); border: 3px double #f4d03f; padding: 20px; max-width: 700px; width: 90%; box-shadow: 0 0 40px rgba(244,208,63,0.4); max-height: 90vh; overflow-y: auto; }
-  .modal h2 { font-family: 'MedievalSharp', cursive; color: #f4d03f; margin-bottom: 12px; font-size: 24px; text-align: center; }
-  .modal p { margin-bottom: 14px; line-height: 1.6; text-align: center; }
-  .modal input { background: #0a0503; border: 2px inset #6b4423; color: #f4d03f; padding: 8px; font-family: inherit; font-size: 14px; width: 200px; text-align: center; }
-  .modal .classes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 12px 0; }
-  .modal .cls { padding: 12px; border: 2px solid #6b4423; cursor: pointer; background: rgba(0,0,0,0.3); }
-  .modal .cls:hover { border-color: #f4d03f; background: rgba(107,68,35,0.4); }
-  .modal .cls .ico { font-size: 36px; text-align: center; }
-  .modal .cls .nm { font-family: 'MedievalSharp', cursive; color: #f4d03f; margin: 4px 0; text-align: center; }
-  .modal .cls .desc { font-size: 11px; color: #8b6f47; text-align: center; }
-
-  .shop-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 10px; padding: 0 6px; }
-  .shop-header .gold { color: #f4d03f; font-family: 'MedievalSharp', cursive; font-size: 16px; }
-  .shop-header .close { background: linear-gradient(180deg, #8b0000, #4a0000); color: #fff; border: 2px outset #d12626; padding: 4px 12px; cursor: pointer; font-family: 'MedievalSharp', cursive; }
-  .shop-tabs { display: flex; border-bottom: 2px solid #6b4423; margin-bottom: 10px; }
-  .shop-tab { flex: 1; text-align: center; padding: 6px; cursor: pointer; background: linear-gradient(180deg, #2a1810, #1a0e08); color: #8b6f47; border: 1px solid #4a2818; font-family: 'MedievalSharp', cursive; font-size: 12px; }
-  .shop-tab.active { background: linear-gradient(180deg, #6b4423, #4a2818); color: #f4d03f; }
-  .shop-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .shop-card { border: 2px ridge #6b4423; background: linear-gradient(180deg, rgba(40,20,10,0.7), rgba(20,10,5,0.7)); padding: 8px; display: flex; flex-direction: column; align-items: center; text-align: center; font-size: 12px; }
-  .shop-card .ico { font-size: 32px; line-height: 1; margin: 4px 0; filter: drop-shadow(0 0 4px rgba(244,208,63,0.4)); }
-  .shop-card .nm { font-family: 'MedievalSharp', cursive; color: #f4d03f; font-size: 13px; }
-  .shop-card .ds { color: #8b6f47; font-size: 11px; min-height: 30px; margin: 4px 0; }
-  .shop-card .price { color: #f4d03f; font-weight: bold; margin: 4px 0; }
-  .shop-card .price.no { color: #d12626; }
-  .shop-card button { font-family: 'MedievalSharp', cursive; padding: 4px 10px; background: linear-gradient(180deg, #6b4423, #3a2010); color: #f4d03f; border: 2px outset #8b6f47; cursor: pointer; font-size: 12px; margin-top: 4px; }
-  .shop-card button:disabled { opacity: 0.4; cursor: not-allowed; }
-  .shop-card button:hover:not(:disabled) { background: linear-gradient(180deg, #8b5a2b, #4a2818); }
-  .shop-card .equipped { color: #6abe30; font-size: 10px; font-style: italic; }
-
-  .gi { display: inline-block; width: 1em; height: 1em; vertical-align: -0.15em;
-        filter: brightness(0) saturate(100%) invert(86%) sepia(22%) saturate(1160%) hue-rotate(3deg) brightness(101%) contrast(93%);
-        object-fit: contain; }
-  .scene-box .gi { width: 42px; height: 42px; vertical-align: middle; filter: brightness(0) saturate(100%) invert(86%) sepia(22%) saturate(1160%) hue-rotate(3deg) brightness(101%) contrast(93%) drop-shadow(0 0 6px rgba(244,208,63,0.5)); }
-  .equip-slot .gi { width: 22px; height: 22px; }
-  .modal .cls .gi { width: 36px; height: 36px; }
-  .shop-card .gi { width: 32px; height: 32px; filter: brightness(0) saturate(100%) invert(86%) sepia(22%) saturate(1160%) hue-rotate(3deg) brightness(101%) contrast(93%) drop-shadow(0 0 4px rgba(244,208,63,0.4)); }
-  .portrait .gi { width: 2.2em; height: 2.2em; }
-  .stage-bar .gi { width: 14px; height: 14px; }
-  .gi.good { filter: brightness(0) saturate(100%) invert(72%) sepia(40%) saturate(610%) hue-rotate(55deg) brightness(95%) contrast(88%); }
-  .gi.bad  { filter: brightness(0) saturate(100%) invert(45%) sepia(82%) saturate(3000%) hue-rotate(340deg) brightness(90%) contrast(95%); }
-  .gi.magic{ filter: brightness(0) saturate(100%) invert(68%) sepia(30%) saturate(800%) hue-rotate(165deg) brightness(95%) contrast(90%); }
-
-  .modal-overlay {
-    position: fixed; inset: 0; background: rgba(5,3,2,0.75);
-    display: none; align-items: center; justify-content: center;
-    z-index: 9999; backdrop-filter: blur(2px);
-    animation: modalFade 0.15s ease-out;
-  }
-  .modal-overlay.show { display: flex; }
-  @keyframes modalFade { from { opacity: 0 } to { opacity: 1 } }
-  .modal-box {
-    min-width: 320px; max-width: 460px;
-    border: 2px solid #8b6f47;
-    background: linear-gradient(180deg, #2a1810, #1a0e08);
-    box-shadow: 0 0 20px rgba(0,0,0,0.9), inset 0 0 30px rgba(0,0,0,0.5);
-    color: #d4b87a;
-    animation: modalPop 0.2s ease-out;
-  }
-  @keyframes modalPop { from { transform: scale(0.92); opacity: 0 } to { transform: scale(1); opacity: 1 } }
-  .modal-box h3 {
-    font-family: 'MedievalSharp', cursive;
-    background: linear-gradient(90deg, #4a2818, #6b4423, #4a2818);
-    color: #f4d03f; padding: 8px 14px; font-size: 15px;
-    letter-spacing: 1px; border-bottom: 1px solid #6b4423;
-    text-shadow: 1px 1px 0 #000;
-    display: flex; align-items: center; gap: 8px;
-  }
-  .modal-box .modal-body {
-    padding: 16px 18px; font-size: 13px; line-height: 1.5;
-    color: #d4b87a; min-height: 40px;
-  }
-  .modal-box .modal-actions {
-    display: flex; justify-content: flex-end; gap: 8px;
-    padding: 10px 14px; border-top: 1px solid #4a2818;
-    background: rgba(0,0,0,0.3);
-  }
-  .modal-btn {
-    font-family: 'MedievalSharp', cursive;
-    padding: 6px 16px; min-width: 90px; cursor: pointer;
-    font-size: 13px; letter-spacing: 1px; text-shadow: 1px 1px 0 #000;
-    border: 2px outset #8b6f47; color: #f4d03f;
-    background: linear-gradient(180deg, #6b4423, #3a2010);
-    transition: all 0.12s;
-  }
-  .modal-btn:hover { background: linear-gradient(180deg, #8b5a2b, #4a2818); box-shadow: 0 0 8px rgba(244,208,63,0.5); }
-  .modal-btn:active { border-style: inset; transform: translateY(1px); }
-  .modal-btn.cancel { color: #a89577; border-color: #6b4423; background: linear-gradient(180deg, #3a2010, #1a0e08); }
-  .modal-btn.cancel:hover { color: #d4b87a; box-shadow: 0 0 6px rgba(107,68,35,0.6); }
-  .modal-btn.danger { color: #ff6b4a; }
-
-  .auth-panel {
-    margin: 12px auto 16px; max-width: 380px;
-    border: 1px solid #8b6f47;
-    background: linear-gradient(180deg, rgba(40,20,10,0.7), rgba(15,8,4,0.7));
-    box-shadow: inset 0 0 15px rgba(0,0,0,0.6);
-    padding: 14px 16px;
-  }
-  .auth-panel .auth-hint {
-    color: #8b6f47; font-size: 12px; text-align: center;
-    margin-bottom: 10px; font-style: italic; line-height: 1.4;
-  }
-  .auth-panel .auth-account {
-    color: #d4b87a; font-size: 13px; text-align: center; margin-bottom: 8px;
-  }
-  .auth-panel .auth-account b { color: #f4d03f; }
-  .auth-field {
-    display: flex; align-items: center; gap: 8px;
-    border: 1px solid #6b4423;
-    background: #0f0704;
-    padding: 6px 10px;
-    margin-bottom: 6px;
-    transition: border-color 0.15s, box-shadow 0.15s;
-  }
-  .auth-field:focus-within {
-    border-color: #f4d03f;
-    box-shadow: 0 0 6px rgba(244,208,63,0.3);
-  }
-  .auth-field img.gi { width: 14px; height: 14px; opacity: 0.7; flex-shrink: 0; }
-  .auth-field input {
-    flex: 1; border: none; outline: none; background: transparent;
-    color: #f4d03f; font-family: 'PT Serif', serif; font-size: 13px;
-    padding: 2px 0;
-  }
-  .auth-field input::placeholder { color: #6b4423; font-style: italic; }
-  .auth-field input:-webkit-autofill,
-  .auth-field input:-webkit-autofill:hover,
-  .auth-field input:-webkit-autofill:focus,
-  .auth-field input:-webkit-autofill:active {
-    -webkit-text-fill-color: #f4d03f !important;
-    -webkit-box-shadow: 0 0 0 1000px #0f0704 inset !important;
-    box-shadow: 0 0 0 1000px #0f0704 inset !important;
-    caret-color: #f4d03f;
-    transition: background-color 5000s ease-in-out 0s;
-  }
-  .auth-actions {
-    display: flex; gap: 6px; justify-content: center; margin-top: 10px;
-  }
-  .auth-btn {
-    font-family: 'MedievalSharp', cursive;
-    padding: 6px 18px; cursor: pointer;
-    font-size: 13px; letter-spacing: 1px; text-shadow: 1px 1px 0 #000;
-    border: 2px outset #8b6f47; color: #f4d03f;
-    background: linear-gradient(180deg, #6b4423, #3a2010);
-    transition: all 0.12s;
-  }
-  .auth-btn:hover { background: linear-gradient(180deg, #8b5a2b, #4a2818); box-shadow: 0 0 8px rgba(244,208,63,0.5); }
-  .auth-btn:active { border-style: inset; transform: translateY(1px); }
-  .auth-btn.ghost { color: #a89577; background: linear-gradient(180deg, #3a2010, #1a0e08); }
-  .auth-msg {
-    font-size: 11px; text-align: center; margin-top: 8px;
-    min-height: 14px; font-style: italic;
-  }
-  .lb-table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:11px; }
-  .lb-table th, .lb-table td { padding:5px 2px; text-align:center; vertical-align:middle; }
-  .lb-h {
-    font-size:10px; color:#8b6f47; font-weight:normal;
-    text-transform:uppercase; letter-spacing:0.5px;
-    padding:2px 2px 6px!important;
-    border-bottom:1px solid rgba(139,111,71,0.5);
-  }
-  .lb-row { border-bottom:1px solid rgba(74,40,24,0.4); transition:background 0.12s; }
-  .lb-row:hover { background:rgba(244,208,63,0.06); }
-  .lb-row.me { background:rgba(244,208,63,0.12); box-shadow:inset 2px 0 0 #f4d03f; }
-  .lb-rank {
-    font-weight:bold; font-size:12px; color:#8b6f47;
-    font-variant-numeric:tabular-nums;
-  }
-  .lb-row.top1 .lb-rank { color:#f4d03f; text-shadow:0 0 6px rgba(244,208,63,0.7); }
-  .lb-row.top2 .lb-rank { color:#d8d8d8; text-shadow:0 0 4px rgba(200,200,200,0.5); }
-  .lb-row.top3 .lb-rank { color:#cd7f32; text-shadow:0 0 4px rgba(205,127,50,0.5); }
-  .lb-hero {
-    text-align:left!important; padding-left:5px!important;
-    overflow:hidden;
-  }
-  .lb-nick {
-    font-weight:bold; font-size:11px; line-height:1.2;
-    word-break:break-word; color:#d4b87a;
-  }
-  .lb-row.me .lb-nick { color:#f4d03f; }
-  .lb-cls {
-    font-size:9px; color:#6b4423; font-style:italic;
-    line-height:1.1; margin-top:1px;
-  }
-  .lb-num { font-variant-numeric:tabular-nums; color:#c9ad72; }
-  .lb-num.gold { color:#f4d03f; }
-  .lb-num.pvp { color:#cf4030; }
-  .lb-num.zero { color:#5a3a20; }
-</style>
+<link rel="stylesheet" href="/styles/rich.css"/>
 </head>
 <body>
 <div id="confirm-modal" class="modal-overlay" role="dialog" aria-modal="true">
   <div class="modal-box">
-    <h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> <span id="confirm-title">Подтверждение</span></h3>
+    <h3><img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt=""> <span id="confirm-title">Подтверждение</span></h3>
     <div class="modal-body" id="confirm-text"></div>
     <div class="modal-actions">
       <button type="button" class="modal-btn cancel" id="confirm-no">Отмена</button>
@@ -445,29 +18,29 @@
 </div>
 <div class="frame">
   <header>
-    <h1><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Сумрачные Земли <img class="gi" src="assets/icons/crossed-swords.svg" alt=""></h1>
+    <h1><img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt=""> Сумрачные Земли <img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt=""></h1>
     <div class="sub">— текстовая ролевая игра в духе старого интернета —</div>
   </header>
 
   <div class="layout">
     <div class="col left">
       <div class="panel">
-        <h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Герой <span class="hero-meta-inline" id="hero-meta"></span></h3>
+        <h3><img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt=""> Герой <span class="hero-meta-inline" id="hero-meta"></span></h3>
         <div class="body">
           <div id="equip-body"></div>
-          <div class="bar-row hp"><div class="bar-ico"><img src="assets/icons/hearts.svg" alt="HP"></div><div class="bar hp"><div class="ghost" id="hp-ghost"></div><div class="fill" id="hp-fill"></div><div class="label" id="hp-lbl">100/100</div></div></div>
-          <div class="bar-row mp"><div class="bar-ico"><img src="assets/icons/round-bottom-flask.svg" alt="MP"></div><div class="bar mp"><div class="ghost" id="mp-ghost"></div><div class="fill" id="mp-fill"></div><div class="label" id="mp-lbl">50/50</div></div></div>
-          <div class="bar-row xp"><div class="bar-ico"><img src="assets/icons/star-formation.svg" alt="XP"></div><div class="bar xp"><div class="fill" id="xp-fill"></div><div class="label" id="xp-lbl">0/100</div></div></div>
+          <div class="bar-row hp"><div class="bar-ico"><img decoding="async" src="assets/icons/hearts.svg" alt="HP"></div><div class="bar hp"><div class="ghost" id="hp-ghost"></div><div class="fill" id="hp-fill"></div><div class="label" id="hp-lbl">100/100</div></div></div>
+          <div class="bar-row mp"><div class="bar-ico"><img decoding="async" src="assets/icons/round-bottom-flask.svg" alt="MP"></div><div class="bar mp"><div class="ghost" id="mp-ghost"></div><div class="fill" id="mp-fill"></div><div class="label" id="mp-lbl">50/50</div></div></div>
+          <div class="bar-row xp"><div class="bar-ico"><img decoding="async" src="assets/icons/star-formation.svg" alt="XP"></div><div class="bar xp"><div class="fill" id="xp-fill"></div><div class="label" id="xp-lbl">0/100</div></div></div>
         </div>
       </div>
-      <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Характеристики</h3><div class="body" id="stats-body"></div></div>
+      <div class="panel"><h3><img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt=""> Характеристики</h3><div class="body" id="stats-body"></div></div>
     </div>
 
     <div class="col center">
       <div class="center-top">
         <div class="scene-strip">
           <div class="scene-box">
-            <div class="ico" id="scene-art"><img class="gi" src="assets/icons/castle.svg" alt=""></div>
+            <div class="ico" id="scene-art"><img decoding="async" class="gi" src="assets/icons/castle.svg" alt=""></div>
             <div class="txt"><div class="nm" id="scene-name">—</div><div class="ds" id="scene-desc">—</div></div>
           </div>
           <div class="enemies-area" id="combat-area" style="display:none"></div>
@@ -475,7 +48,7 @@
         <div class="stage-bar" id="stage-bar"></div>
       </div>
       <div class="panel log-panel">
-        <h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Журнал событий</h3>
+        <h3><img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt=""> Журнал событий</h3>
         <div class="body"><div class="log" id="log"></div></div>
       </div>
       <div class="actions" id="actions"></div>
@@ -489,20 +62,20 @@
         <div class="tab" data-tab="leaders">Рейтинг</div>
       </div>
       <div id="tab-inv">
-        <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Зелья и припасы</h3><div class="body" id="inv-body"></div></div>
-        <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Магия</h3><div class="body" id="spells-body"></div></div>
-        <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Реликвии</h3><div class="body" id="quest-items-body"></div></div>
+        <div class="panel"><h3><img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt=""> Зелья и припасы</h3><div class="body" id="inv-body"></div></div>
+        <div class="panel"><h3><img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt=""> Магия</h3><div class="body" id="spells-body"></div></div>
+        <div class="panel"><h3><img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt=""> Реликвии</h3><div class="body" id="quest-items-body"></div></div>
       </div>
       <div id="tab-map" style="display:none">
-        <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Сумрачные Земли</h3><div class="body" id="map-body"></div></div>
+        <div class="panel"><h3><img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt=""> Сумрачные Земли</h3><div class="body" id="map-body"></div></div>
       </div>
       <div id="tab-quest" style="display:none">
-        <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Доступные задания</h3><div class="body" id="avail-body"></div></div>
-        <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Активные задания</h3><div class="body" id="active-body"></div></div>
-        <div class="panel"><h3><img class="gi" src="assets/icons/sparkles.svg" alt=""> Завершённые</h3><div class="body" id="done-body" style="font-size:11px"></div></div>
+        <div class="panel"><h3><img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt=""> Доступные задания</h3><div class="body" id="avail-body"></div></div>
+        <div class="panel"><h3><img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt=""> Активные задания</h3><div class="body" id="active-body"></div></div>
+        <div class="panel"><h3><img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt=""> Завершённые</h3><div class="body" id="done-body" style="font-size:11px"></div></div>
       </div>
       <div id="tab-leaders" style="display:none">
-        <div class="panel"><h3><img class="gi" src="assets/icons/star-formation.svg" alt=""> Топ-50 героев</h3><div class="body" id="leaders-body" style="font-size:12px;padding:8px 6px">загрузка...</div></div>
+        <div class="panel"><h3><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""> Топ-50 героев</h3><div class="body" id="leaders-body" style="font-size:12px;padding:8px 6px">загрузка...</div></div>
       </div>
     </div>
   </div>
@@ -518,13 +91,13 @@
 
 <div class="modal-bg show" id="start-modal" onclick="if(event.target===this&&P)closeStartModal()">
   <div class="modal">
-    <h2><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Добро пожаловать, странник <img class="gi" src="assets/icons/crossed-swords.svg" alt=""></h2>
+    <h2><img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt=""> Добро пожаловать, странник <img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt=""></h2>
     <p>Сумрачные Земли ждут нового героя. Назови себя и выбери свой путь.</p>
     <div id="cloud-body" class="auth-panel"></div>
     <div class="classes">
-      <div class="cls" data-cls="warrior"><div class="ico"><img class="gi" src="assets/icons/barbarian.svg" alt=""></div><div class="nm">Воин</div><div class="desc">Сила и стойкость. Тяжёлый меч.</div></div>
-      <div class="cls" data-cls="mage"><div class="ico"><img class="gi" src="assets/icons/wizard-face.svg" alt=""></div><div class="nm">Маг</div><div class="desc">Огненные шары и лёд.</div></div>
-      <div class="cls" data-cls="rogue"><div class="ico"><img class="gi" src="assets/icons/ninja-head.svg" alt=""></div><div class="nm">Плут</div><div class="desc">Ловкость и яд из тени.</div></div>
+      <div class="cls" data-cls="warrior"><div class="ico"><img decoding="async" class="gi" src="assets/icons/barbarian.svg" alt=""></div><div class="nm">Воин</div><div class="desc">Сила и стойкость. Тяжёлый меч.</div></div>
+      <div class="cls" data-cls="mage"><div class="ico"><img decoding="async" class="gi" src="assets/icons/wizard-face.svg" alt=""></div><div class="nm">Маг</div><div class="desc">Огненные шары и лёд.</div></div>
+      <div class="cls" data-cls="rogue"><div class="ico"><img decoding="async" class="gi" src="assets/icons/ninja-head.svg" alt=""></div><div class="nm">Плут</div><div class="desc">Ловкость и яд из тени.</div></div>
     </div>
     <p style="font-size:11px;color:#8b6f47">Кликни на класс, чтобы начать приключение.</p>
   </div>
@@ -537,9 +110,9 @@
 <div class="modal-bg" id="shop-modal" onclick="if(event.target===this)closeShop()">
   <div class="modal" style="max-width:780px">
     <div class="shop-header">
-      <h2 style="margin:0;text-align:left;font-size:20px" id="shop-name"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Лавка</h2>
-      <span class="gold"><img class="gi" src="assets/icons/two-coins.svg" alt=""> <span id="shop-gold">0</span></span>
-      <button class="close" onclick="closeShop()"><img class="gi" src="assets/icons/cancel.svg" alt=""> Уйти</button>
+      <h2 style="margin:0;text-align:left;font-size:20px" id="shop-name"><img decoding="async" class="gi" src="assets/icons/shopping-cart.svg" alt=""> Лавка</h2>
+      <span class="gold"><img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt=""> <span id="shop-gold">0</span></span>
+      <button class="close" onclick="closeShop()"><img decoding="async" class="gi" src="assets/icons/cancel.svg" alt=""> Уйти</button>
     </div>
     <div class="shop-tabs" id="shop-tabs"></div>
     <div class="shop-grid" id="shop-grid"></div>
@@ -550,132 +123,132 @@
 // ==================== ПРЕДМЕТЫ ====================
 const ITEMS = {
   // Оружие
-  w_starter_sword:   { type:'weapon', slot:'weapon', ico:'<img class="gi" src="assets/icons/crossed-swords.svg" alt="">', name:'Стальной меч',     wdmg:[6,10], desc:'Стартовое оружие воина' },
-  w_starter_staff:   { type:'weapon', slot:'weapon', ico:'<img class="gi" src="assets/icons/magic-palm.svg" alt="">', name:'Дубовый посох',    wdmg:[3,6],  desc:'Стартовое оружие мага' },
-  w_starter_daggers: { type:'weapon', slot:'weapon', ico:'<img class="gi" src="assets/icons/plain-dagger.svg" alt="">', name:'Парные кинжалы',   wdmg:[4,9],  desc:'Стартовое оружие плута' },
-  w_axe:             { type:'weapon', slot:'weapon', ico:'<img class="gi" src="assets/icons/battle-axe.svg" alt="">', name:'Боевой топор',     wdmg:[9,15], price:200, desc:'Грубо, но эффективно' },
-  w_warhammer:       { type:'weapon', slot:'weapon', ico:'<img class="gi" src="assets/icons/flat-hammer.svg" alt="">', name:'Боевой молот',     wdmg:[13,21],price:480, desc:'Дробит кости и латы' },
-  w_greatsword:      { type:'weapon', slot:'weapon', ico:'<img class="gi" src="assets/icons/crossed-swords.svg" alt="">', name:'Двуручный меч',    wdmg:[17,27],price:950, desc:'Огромный клинок' },
-  w_runic:           { type:'weapon', slot:'weapon', ico:'<img class="gi" src="assets/icons/sparkles.svg" alt="">', name:'Рунный клинок',    wdmg:[23,35],price:1900,desc:'Покрыт древними рунами' },
-  w_dragonfang:      { type:'weapon', slot:'weapon', ico:'<img class="gi" src="assets/icons/dragon-head.svg" alt="">', name:'Драконий клык',    wdmg:[30,46],price:4500,desc:'Создан из клыка дракона' },
+  w_starter_sword:   { type:'weapon', slot:'weapon', ico:'<img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt="">', name:'Стальной меч',     wdmg:[6,10], desc:'Стартовое оружие воина' },
+  w_starter_staff:   { type:'weapon', slot:'weapon', ico:'<img decoding="async" class="gi" src="assets/icons/magic-palm.svg" alt="">', name:'Дубовый посох',    wdmg:[3,6],  desc:'Стартовое оружие мага' },
+  w_starter_daggers: { type:'weapon', slot:'weapon', ico:'<img decoding="async" class="gi" src="assets/icons/plain-dagger.svg" alt="">', name:'Парные кинжалы',   wdmg:[4,9],  desc:'Стартовое оружие плута' },
+  w_axe:             { type:'weapon', slot:'weapon', ico:'<img decoding="async" class="gi" src="assets/icons/battle-axe.svg" alt="">', name:'Боевой топор',     wdmg:[9,15], price:200, desc:'Грубо, но эффективно' },
+  w_warhammer:       { type:'weapon', slot:'weapon', ico:'<img decoding="async" class="gi" src="assets/icons/flat-hammer.svg" alt="">', name:'Боевой молот',     wdmg:[13,21],price:480, desc:'Дробит кости и латы' },
+  w_greatsword:      { type:'weapon', slot:'weapon', ico:'<img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt="">', name:'Двуручный меч',    wdmg:[17,27],price:950, desc:'Огромный клинок' },
+  w_runic:           { type:'weapon', slot:'weapon', ico:'<img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt="">', name:'Рунный клинок',    wdmg:[23,35],price:1900,desc:'Покрыт древними рунами' },
+  w_dragonfang:      { type:'weapon', slot:'weapon', ico:'<img decoding="async" class="gi" src="assets/icons/dragon-head.svg" alt="">', name:'Драконий клык',    wdmg:[30,46],price:4500,desc:'Создан из клыка дракона' },
   // Оружие воина
-  ww_gladius:        { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/relic-blade.svg" alt="">', name:'Короткий клинок', wdmg:[5,9],   price:90,   desc:'Быстрый и лёгкий' },
-  ww_broadsword:     { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/broadsword.svg" alt="">', name:'Широкий меч',     wdmg:[10,16], price:260,  desc:'Надёжная сталь' },
-  ww_cleaver:        { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/cleaver.svg" alt="">', name:'Тесак мясника',   wdmg:[11,20], price:340,  desc:'Грубо, но безжалостно' },
-  ww_halberd:        { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/halberd.svg" alt="">', name:'Алебарда',        wdmg:[14,22], price:520,  desc:'Длинное древко, тяжёлый наконечник' },
-  ww_stone_axe:      { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/stone-axe.svg" alt="">', name:'Каменный топор',  wdmg:[15,23], bonuses:{str:2}, price:640,  desc:'+2 STR, варварская мощь' },
-  ww_war_pick:       { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/war-pick.svg" alt="">', name:'Боевая кирка',    wdmg:[16,24], price:720,  desc:'Пробивает латы' },
-  ww_spiked_mace:    { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/spiked-mace.svg" alt="">', name:'Шипастая булава', wdmg:[18,28], bonuses:{str:3}, price:1000, desc:'+3 STR, дробит всё' },
-  ww_katana:         { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/katana.svg" alt="">', name:'Катана',          wdmg:[21,32], bonuses:{agi:2,crit:5}, price:1450, desc:'+2 AGI, +5% крит' },
-  ww_winged_sword:   { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/winged-sword.svg" alt="">', name:'Крылатый меч',    wdmg:[26,38], bonuses:{str:4}, price:2200, desc:'+4 STR, благословлён' },
-  ww_bloody:         { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img class="gi" src="assets/icons/bloody-sword.svg" alt="">', name:'Кровавый клинок', wdmg:[34,50], bonuses:{str:6,crit:10}, price:3900, desc:'+6 STR, +10% крит' },
+  ww_gladius:        { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img decoding="async" class="gi" src="assets/icons/relic-blade.svg" alt="">', name:'Короткий клинок', wdmg:[5,9],   price:90,   desc:'Быстрый и лёгкий' },
+  ww_broadsword:     { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img decoding="async" class="gi" src="assets/icons/broadsword.svg" alt="">', name:'Широкий меч',     wdmg:[10,16], price:260,  desc:'Надёжная сталь' },
+  ww_cleaver:        { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img decoding="async" class="gi" src="assets/icons/cleaver.svg" alt="">', name:'Тесак мясника',   wdmg:[11,20], price:340,  desc:'Грубо, но безжалостно' },
+  ww_halberd:        { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img decoding="async" class="gi" src="assets/icons/halberd.svg" alt="">', name:'Алебарда',        wdmg:[14,22], price:520,  desc:'Длинное древко, тяжёлый наконечник' },
+  ww_stone_axe:      { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img decoding="async" class="gi" src="assets/icons/stone-axe.svg" alt="">', name:'Каменный топор',  wdmg:[15,23], bonuses:{str:2}, price:640,  desc:'+2 STR, варварская мощь' },
+  ww_war_pick:       { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img decoding="async" class="gi" src="assets/icons/war-pick.svg" alt="">', name:'Боевая кирка',    wdmg:[16,24], price:720,  desc:'Пробивает латы' },
+  ww_spiked_mace:    { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img decoding="async" class="gi" src="assets/icons/spiked-mace.svg" alt="">', name:'Шипастая булава', wdmg:[18,28], bonuses:{str:3}, price:1000, desc:'+3 STR, дробит всё' },
+  ww_katana:         { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img decoding="async" class="gi" src="assets/icons/katana.svg" alt="">', name:'Катана',          wdmg:[21,32], bonuses:{agi:2,crit:5}, price:1450, desc:'+2 AGI, +5% крит' },
+  ww_winged_sword:   { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img decoding="async" class="gi" src="assets/icons/winged-sword.svg" alt="">', name:'Крылатый меч',    wdmg:[26,38], bonuses:{str:4}, price:2200, desc:'+4 STR, благословлён' },
+  ww_bloody:         { type:'weapon', slot:'weapon', cls:'warrior', ico:'<img decoding="async" class="gi" src="assets/icons/bloody-sword.svg" alt="">', name:'Кровавый клинок', wdmg:[34,50], bonuses:{str:6,crit:10}, price:3900, desc:'+6 STR, +10% крит' },
   // Оружие мага
-  wm_crystal_wand:   { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/crystal-wand.svg" alt="">', name:'Хрустальная палочка', wdmg:[4,8],   bonuses:{int:1}, price:100,  desc:'+1 INT' },
-  wm_fairy_wand:     { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/fairy-wand.svg" alt="">', name:'Волшебная палочка',   wdmg:[6,12],  bonuses:{int:2,mpMax:10}, price:240,  desc:'+2 INT, +10 MP' },
-  wm_scroll_staff:   { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/scroll-unfurled.svg" alt="">', name:'Посох свитков',    wdmg:[9,15],  bonuses:{int:3,mpMax:15}, price:440,  desc:'+3 INT, +15 MP' },
-  wm_gem_wand:       { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/gem-pendant.svg" alt="">', name:'Самоцветный жезл',   wdmg:[11,18], bonuses:{int:4}, price:720,  desc:'+4 INT' },
-  wm_frost_orb:      { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/frozen-orb.svg" alt="">', name:'Посох мороза',       wdmg:[14,22], bonuses:{int:5,mpMax:20}, price:1050, desc:'+5 INT, +20 MP' },
-  wm_swirl_wand:     { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/magic-swirl.svg" alt="">', name:'Жезл вихря чар',     wdmg:[17,26], bonuses:{int:6}, price:1450, desc:'+6 INT' },
-  wm_thunder:        { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/lightning-bolt.svg" alt="">', name:'Громовой жезл',    wdmg:[20,30], bonuses:{int:7,mpMax:25}, price:1950, desc:'+7 INT, +25 MP' },
-  wm_trident:        { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/magic-trident.svg" alt="">', name:'Магический трезубец', wdmg:[23,34], bonuses:{int:8}, price:2550, desc:'+8 INT' },
-  wm_tome:           { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/spell-book.svg" alt="">', name:'Гримуар заклинаний', wdmg:[26,38], bonuses:{int:9,mpMax:35}, price:3300, desc:'+9 INT, +35 MP' },
-  wm_sun_orb:        { type:'weapon', slot:'weapon', cls:'mage', ico:'<img class="gi" src="assets/icons/gooey-eyed-sun.svg" alt="">', name:'Солнечный око-жезл', wdmg:[32,46], bonuses:{int:12,mpMax:50}, price:4900, desc:'+12 INT, +50 MP' },
+  wm_crystal_wand:   { type:'weapon', slot:'weapon', cls:'mage', ico:'<img decoding="async" class="gi" src="assets/icons/crystal-wand.svg" alt="">', name:'Хрустальная палочка', wdmg:[4,8],   bonuses:{int:1}, price:100,  desc:'+1 INT' },
+  wm_fairy_wand:     { type:'weapon', slot:'weapon', cls:'mage', ico:'<img decoding="async" class="gi" src="assets/icons/fairy-wand.svg" alt="">', name:'Волшебная палочка',   wdmg:[6,12],  bonuses:{int:2,mpMax:10}, price:240,  desc:'+2 INT, +10 MP' },
+  wm_scroll_staff:   { type:'weapon', slot:'weapon', cls:'mage', ico:'<img decoding="async" class="gi" src="assets/icons/scroll-unfurled.svg" alt="">', name:'Посох свитков',    wdmg:[9,15],  bonuses:{int:3,mpMax:15}, price:440,  desc:'+3 INT, +15 MP' },
+  wm_gem_wand:       { type:'weapon', slot:'weapon', cls:'mage', ico:'<img decoding="async" class="gi" src="assets/icons/gem-pendant.svg" alt="">', name:'Самоцветный жезл',   wdmg:[11,18], bonuses:{int:4}, price:720,  desc:'+4 INT' },
+  wm_frost_orb:      { type:'weapon', slot:'weapon', cls:'mage', ico:'<img decoding="async" class="gi" src="assets/icons/frozen-orb.svg" alt="">', name:'Посох мороза',       wdmg:[14,22], bonuses:{int:5,mpMax:20}, price:1050, desc:'+5 INT, +20 MP' },
+  wm_swirl_wand:     { type:'weapon', slot:'weapon', cls:'mage', ico:'<img decoding="async" class="gi" src="assets/icons/magic-swirl.svg" alt="">', name:'Жезл вихря чар',     wdmg:[17,26], bonuses:{int:6}, price:1450, desc:'+6 INT' },
+  wm_thunder:        { type:'weapon', slot:'weapon', cls:'mage', ico:'<img decoding="async" class="gi" src="assets/icons/lightning-bolt.svg" alt="">', name:'Громовой жезл',    wdmg:[20,30], bonuses:{int:7,mpMax:25}, price:1950, desc:'+7 INT, +25 MP' },
+  wm_trident:        { type:'weapon', slot:'weapon', cls:'mage', ico:'<img decoding="async" class="gi" src="assets/icons/magic-trident.svg" alt="">', name:'Магический трезубец', wdmg:[23,34], bonuses:{int:8}, price:2550, desc:'+8 INT' },
+  wm_tome:           { type:'weapon', slot:'weapon', cls:'mage', ico:'<img decoding="async" class="gi" src="assets/icons/spell-book.svg" alt="">', name:'Гримуар заклинаний', wdmg:[26,38], bonuses:{int:9,mpMax:35}, price:3300, desc:'+9 INT, +35 MP' },
+  wm_sun_orb:        { type:'weapon', slot:'weapon', cls:'mage', ico:'<img decoding="async" class="gi" src="assets/icons/gooey-eyed-sun.svg" alt="">', name:'Солнечный око-жезл', wdmg:[32,46], bonuses:{int:12,mpMax:50}, price:4900, desc:'+12 INT, +50 MP' },
   // Оружие плута
-  wr_curvy_knife:    { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/curvy-knife.svg" alt="">', name:'Изогнутый нож',    wdmg:[5,10],  bonuses:{crit:3}, price:100,  desc:'+3% крит' },
-  wr_stiletto:       { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/stiletto.svg" alt="">', name:'Стилет',           wdmg:[7,13],  bonuses:{crit:6}, price:250,  desc:'+6% крит' },
-  wr_sai:            { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/sai.svg" alt="">', name:'Пара саи',          wdmg:[10,16], bonuses:{agi:2}, price:450,  desc:'+2 AGI' },
-  wr_butterfly:      { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/butterfly-knife.svg" alt="">', name:'Нож-бабочка',     wdmg:[12,19], bonuses:{crit:9}, price:720,  desc:'+9% крит' },
-  wr_feather:        { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/feather.svg" alt="">', name:'Перо гарпии',       wdmg:[14,22], bonuses:{agi:3,crit:5}, price:1000, desc:'+3 AGI, +5% крит' },
-  wr_thrown:         { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/thrown-daggers.svg" alt="">', name:'Метательные клинки', wdmg:[16,26], bonuses:{crit:12}, price:1350, desc:'+12% крит' },
-  wr_poison:         { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/poison-bottle.svg" alt="">', name:'Отравленный клинок', wdmg:[18,29], bonuses:{agi:4}, price:1750, desc:'+4 AGI, смазан ядом' },
-  wr_arrow:          { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/arrow-flights.svg" alt="">', name:'Метательные стрелы', wdmg:[22,33], bonuses:{crit:14}, price:2300, desc:'+14% крит' },
-  wr_bow:            { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/bow-arrow.svg" alt="">', name:'Охотничий лук',     wdmg:[25,38], bonuses:{agi:5,crit:8}, price:2900, desc:'+5 AGI, +8% крит' },
-  wr_shadow:         { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img class="gi" src="assets/icons/bowie-knife.svg" alt="">', name:'Теневой клинок',    wdmg:[32,48], bonuses:{agi:6,crit:15}, price:4600, desc:'+6 AGI, +15% крит' },
+  wr_curvy_knife:    { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img decoding="async" class="gi" src="assets/icons/curvy-knife.svg" alt="">', name:'Изогнутый нож',    wdmg:[5,10],  bonuses:{crit:3}, price:100,  desc:'+3% крит' },
+  wr_stiletto:       { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img decoding="async" class="gi" src="assets/icons/stiletto.svg" alt="">', name:'Стилет',           wdmg:[7,13],  bonuses:{crit:6}, price:250,  desc:'+6% крит' },
+  wr_sai:            { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img decoding="async" class="gi" src="assets/icons/sai.svg" alt="">', name:'Пара саи',          wdmg:[10,16], bonuses:{agi:2}, price:450,  desc:'+2 AGI' },
+  wr_butterfly:      { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img decoding="async" class="gi" src="assets/icons/butterfly-knife.svg" alt="">', name:'Нож-бабочка',     wdmg:[12,19], bonuses:{crit:9}, price:720,  desc:'+9% крит' },
+  wr_feather:        { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img decoding="async" class="gi" src="assets/icons/feather.svg" alt="">', name:'Перо гарпии',       wdmg:[14,22], bonuses:{agi:3,crit:5}, price:1000, desc:'+3 AGI, +5% крит' },
+  wr_thrown:         { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img decoding="async" class="gi" src="assets/icons/thrown-daggers.svg" alt="">', name:'Метательные клинки', wdmg:[16,26], bonuses:{crit:12}, price:1350, desc:'+12% крит' },
+  wr_poison:         { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img decoding="async" class="gi" src="assets/icons/poison-bottle.svg" alt="">', name:'Отравленный клинок', wdmg:[18,29], bonuses:{agi:4}, price:1750, desc:'+4 AGI, смазан ядом' },
+  wr_arrow:          { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img decoding="async" class="gi" src="assets/icons/arrow-flights.svg" alt="">', name:'Метательные стрелы', wdmg:[22,33], bonuses:{crit:14}, price:2300, desc:'+14% крит' },
+  wr_bow:            { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img decoding="async" class="gi" src="assets/icons/bow-arrow.svg" alt="">', name:'Охотничий лук',     wdmg:[25,38], bonuses:{agi:5,crit:8}, price:2900, desc:'+5 AGI, +8% крит' },
+  wr_shadow:         { type:'weapon', slot:'weapon', cls:'rogue', ico:'<img decoding="async" class="gi" src="assets/icons/bowie-knife.svg" alt="">', name:'Теневой клинок',    wdmg:[32,48], bonuses:{agi:6,crit:15}, price:4600, desc:'+6 AGI, +15% крит' },
   // Защита (offhand) — щиты
-  o_buckler:         { type:'armor', slot:'offhand', ico:'<img class="gi" src="assets/icons/round-shield.svg" alt="">', name:'Малый щит',        armor:2,  price:90,  desc:'Лёгкая защита для второй руки' },
-  o_shield:          { type:'armor', slot:'offhand', ico:'<img class="gi" src="assets/icons/round-shield.svg" alt="">', name:'Боевой щит',       armor:6,  price:320, desc:'Надёжная защита' },
-  o_tower:           { type:'armor', slot:'offhand', ico:'<img class="gi" src="assets/icons/round-shield.svg" alt="">', name:'Башенный щит',     armor:12, price:1300,desc:'Стена из стали' },
+  o_buckler:         { type:'armor', slot:'offhand', ico:'<img decoding="async" class="gi" src="assets/icons/round-shield.svg" alt="">', name:'Малый щит',        armor:2,  price:90,  desc:'Лёгкая защита для второй руки' },
+  o_shield:          { type:'armor', slot:'offhand', ico:'<img decoding="async" class="gi" src="assets/icons/round-shield.svg" alt="">', name:'Боевой щит',       armor:6,  price:320, desc:'Надёжная защита' },
+  o_tower:           { type:'armor', slot:'offhand', ico:'<img decoding="async" class="gi" src="assets/icons/round-shield.svg" alt="">', name:'Башенный щит',     armor:12, price:1300,desc:'Стена из стали' },
   // Голова
-  h_hood:            { type:'armor', slot:'head', ico:'<img class="gi" src="assets/icons/hood.svg" alt="">', name:'Кожаный капюшон',  bonuses:{agi:2}, armor:1, price:60,  desc:'+2 к ловкости' },
-  h_helmet:          { type:'armor', slot:'head', ico:'<img class="gi" src="assets/icons/visored-helm.svg" alt="">', name:'Стальной шлем',    armor:4, price:220, desc:'Защита головы' },
-  h_crown:           { type:'armor', slot:'head', ico:'<img class="gi" src="assets/icons/crown.svg" alt="">', name:'Корона мудрости',  bonuses:{int:5,mpMax:25}, armor:2, price:900, desc:'+5 INT, +25 MP' },
+  h_hood:            { type:'armor', slot:'head', ico:'<img decoding="async" class="gi" src="assets/icons/hood.svg" alt="">', name:'Кожаный капюшон',  bonuses:{agi:2}, armor:1, price:60,  desc:'+2 к ловкости' },
+  h_helmet:          { type:'armor', slot:'head', ico:'<img decoding="async" class="gi" src="assets/icons/visored-helm.svg" alt="">', name:'Стальной шлем',    armor:4, price:220, desc:'Защита головы' },
+  h_crown:           { type:'armor', slot:'head', ico:'<img decoding="async" class="gi" src="assets/icons/crown.svg" alt="">', name:'Корона мудрости',  bonuses:{int:5,mpMax:25}, armor:2, price:900, desc:'+5 INT, +25 MP' },
   // Плечи
-  s_pads:            { type:'armor', slot:'shoulders', ico:'<img class="gi" src="assets/icons/shoulder-armor.svg" alt="">', name:'Шипастые наплечники', bonuses:{str:2}, armor:1, price:80,  desc:'+2 к силе' },
-  s_pauldrons:       { type:'armor', slot:'shoulders', ico:'<img class="gi" src="assets/icons/shoulder-armor.svg" alt="">', name:'Латные наплечники',   armor:5, price:300, desc:'Тяжёлая защита плеч' },
-  s_dragon:          { type:'armor', slot:'shoulders', ico:'<img class="gi" src="assets/icons/dragon-spiral.svg" alt="">', name:'Драконьи наплечники', armor:9, bonuses:{str:3}, price:1300, desc:'+3 к силе, прочность дракона' },
+  s_pads:            { type:'armor', slot:'shoulders', ico:'<img decoding="async" class="gi" src="assets/icons/shoulder-armor.svg" alt="">', name:'Шипастые наплечники', bonuses:{str:2}, armor:1, price:80,  desc:'+2 к силе' },
+  s_pauldrons:       { type:'armor', slot:'shoulders', ico:'<img decoding="async" class="gi" src="assets/icons/shoulder-armor.svg" alt="">', name:'Латные наплечники',   armor:5, price:300, desc:'Тяжёлая защита плеч' },
+  s_dragon:          { type:'armor', slot:'shoulders', ico:'<img decoding="async" class="gi" src="assets/icons/dragon-spiral.svg" alt="">', name:'Драконьи наплечники', armor:9, bonuses:{str:3}, price:1300, desc:'+3 к силе, прочность дракона' },
   // Тело
-  a_leather:         { type:'armor', slot:'body', ico:'<img class="gi" src="assets/icons/kimono.svg" alt="">', name:'Кожаный доспех',   armor:3,  price:80,  desc:'Лёгкая защита' },
-  a_chain:           { type:'armor', slot:'body', ico:'<img class="gi" src="assets/icons/mail-shirt.svg" alt="">', name:'Кольчуга',         armor:7,  price:240, desc:'Надёжная сталь' },
-  a_plate:           { type:'armor', slot:'body', ico:'<img class="gi" src="assets/icons/breastplate.svg" alt="">', name:'Латные доспехи',   armor:13, price:680, desc:'Тяжёлая броня' },
-  a_dragon:          { type:'armor', slot:'body', ico:'<img class="gi" src="assets/icons/dragon-spiral.svg" alt="">', name:'Драконьи латы',    armor:22, price:2200,desc:'Чешуя древнего змея' },
+  a_leather:         { type:'armor', slot:'body', ico:'<img decoding="async" class="gi" src="assets/icons/kimono.svg" alt="">', name:'Кожаный доспех',   armor:3,  price:80,  desc:'Лёгкая защита' },
+  a_chain:           { type:'armor', slot:'body', ico:'<img decoding="async" class="gi" src="assets/icons/mail-shirt.svg" alt="">', name:'Кольчуга',         armor:7,  price:240, desc:'Надёжная сталь' },
+  a_plate:           { type:'armor', slot:'body', ico:'<img decoding="async" class="gi" src="assets/icons/breastplate.svg" alt="">', name:'Латные доспехи',   armor:13, price:680, desc:'Тяжёлая броня' },
+  a_dragon:          { type:'armor', slot:'body', ico:'<img decoding="async" class="gi" src="assets/icons/dragon-spiral.svg" alt="">', name:'Драконьи латы',    armor:22, price:2200,desc:'Чешуя древнего змея' },
   // Пояс
-  b_leather:         { type:'armor', slot:'belt', ico:'<img class="gi" src="assets/icons/knot.svg" alt="">', name:'Кожаный пояс',     bonuses:{hpMax:20}, price:70,  desc:'+20 HP' },
-  b_warrior:         { type:'armor', slot:'belt', ico:'<img class="gi" src="assets/icons/knot.svg" alt="">', name:'Боевой пояс',      bonuses:{str:3,hpMax:30}, price:320, desc:'+3 STR, +30 HP' },
-  b_might:           { type:'armor', slot:'belt', ico:'<img class="gi" src="assets/icons/knot.svg" alt="">', name:'Пояс могущества',  bonuses:{str:5,hpMax:60}, price:1200, desc:'+5 STR, +60 HP' },
+  b_leather:         { type:'armor', slot:'belt', ico:'<img decoding="async" class="gi" src="assets/icons/knot.svg" alt="">', name:'Кожаный пояс',     bonuses:{hpMax:20}, price:70,  desc:'+20 HP' },
+  b_warrior:         { type:'armor', slot:'belt', ico:'<img decoding="async" class="gi" src="assets/icons/knot.svg" alt="">', name:'Боевой пояс',      bonuses:{str:3,hpMax:30}, price:320, desc:'+3 STR, +30 HP' },
+  b_might:           { type:'armor', slot:'belt', ico:'<img decoding="async" class="gi" src="assets/icons/knot.svg" alt="">', name:'Пояс могущества',  bonuses:{str:5,hpMax:60}, price:1200, desc:'+5 STR, +60 HP' },
 
-  p_cloth:           { type:'armor', slot:'legs', ico:'<img class="gi" src="assets/icons/kimono.svg" alt="">', name:'Тряпичные штаны',   armor:1,  price:40,   desc:'Лучше, чем ничего' },
-  p_leather:         { type:'armor', slot:'legs', ico:'<img class="gi" src="assets/icons/kimono.svg" alt="">', name:'Кожаные штаны',     armor:3,  price:120,  desc:'Удобная защита ног' },
-  p_chain:           { type:'armor', slot:'legs', ico:'<img class="gi" src="assets/icons/mail-shirt.svg" alt="">', name:'Кольчужные поножи',  armor:6,  price:380,  desc:'Звенят сталью' },
-  p_plate:           { type:'armor', slot:'legs', ico:'<img class="gi" src="assets/icons/shoulder-armor.svg" alt="">', name:'Латные поножи',      armor:11, price:860,  desc:'Тяжёлая защита ног' },
-  p_dragon:          { type:'armor', slot:'legs', ico:'<img class="gi" src="assets/icons/dragon-spiral.svg" alt="">', name:'Драконьи поножи',    armor:18, price:2100, desc:'Чешуя укрывает ноги' },
-  p_assassin:        { type:'armor', slot:'legs', ico:'<img class="gi" src="assets/icons/kimono.svg" alt="">', name:'Тени ассасина',     armor:4, bonuses:{agi:4}, price:700,  desc:'+4 AGI, броня 4' },
+  p_cloth:           { type:'armor', slot:'legs', ico:'<img decoding="async" class="gi" src="assets/icons/kimono.svg" alt="">', name:'Тряпичные штаны',   armor:1,  price:40,   desc:'Лучше, чем ничего' },
+  p_leather:         { type:'armor', slot:'legs', ico:'<img decoding="async" class="gi" src="assets/icons/kimono.svg" alt="">', name:'Кожаные штаны',     armor:3,  price:120,  desc:'Удобная защита ног' },
+  p_chain:           { type:'armor', slot:'legs', ico:'<img decoding="async" class="gi" src="assets/icons/mail-shirt.svg" alt="">', name:'Кольчужные поножи',  armor:6,  price:380,  desc:'Звенят сталью' },
+  p_plate:           { type:'armor', slot:'legs', ico:'<img decoding="async" class="gi" src="assets/icons/shoulder-armor.svg" alt="">', name:'Латные поножи',      armor:11, price:860,  desc:'Тяжёлая защита ног' },
+  p_dragon:          { type:'armor', slot:'legs', ico:'<img decoding="async" class="gi" src="assets/icons/dragon-spiral.svg" alt="">', name:'Драконьи поножи',    armor:18, price:2100, desc:'Чешуя укрывает ноги' },
+  p_assassin:        { type:'armor', slot:'legs', ico:'<img decoding="async" class="gi" src="assets/icons/kimono.svg" alt="">', name:'Тени ассасина',     armor:4, bonuses:{agi:4}, price:700,  desc:'+4 AGI, броня 4' },
   // Кольца
-  ring_str:          { type:'accessory', slot:'ring', ico:'<img class="gi" src="assets/icons/diamond-ring.svg" alt="">', name:'Кольцо силы',      bonuses:{str:4},   price:160, desc:'+4 к силе' },
-  ring_agi:          { type:'accessory', slot:'ring', ico:'<img class="gi" src="assets/icons/diamond-ring.svg" alt="">', name:'Кольцо ловкости',  bonuses:{agi:4},   price:160, desc:'+4 к ловкости' },
-  ring_int:          { type:'accessory', slot:'ring', ico:'<img class="gi" src="assets/icons/diamond-ring.svg" alt="">', name:'Кольцо мудрости',  bonuses:{int:4},   price:160, desc:'+4 к интеллекту' },
+  ring_str:          { type:'accessory', slot:'ring', ico:'<img decoding="async" class="gi" src="assets/icons/diamond-ring.svg" alt="">', name:'Кольцо силы',      bonuses:{str:4},   price:160, desc:'+4 к силе' },
+  ring_agi:          { type:'accessory', slot:'ring', ico:'<img decoding="async" class="gi" src="assets/icons/diamond-ring.svg" alt="">', name:'Кольцо ловкости',  bonuses:{agi:4},   price:160, desc:'+4 к ловкости' },
+  ring_int:          { type:'accessory', slot:'ring', ico:'<img decoding="async" class="gi" src="assets/icons/diamond-ring.svg" alt="">', name:'Кольцо мудрости',  bonuses:{int:4},   price:160, desc:'+4 к интеллекту' },
   // Амулеты
-  amulet_hp:         { type:'accessory', slot:'amulet', ico:'<img class="gi" src="assets/icons/prayer-beads.svg" alt="">', name:'Амулет жизни',     bonuses:{hpMax:50},price:380, desc:'+50 к макс. HP' },
-  amulet_mp:         { type:'accessory', slot:'amulet', ico:'<img class="gi" src="assets/icons/prayer-beads.svg" alt="">', name:'Амулет маны',      bonuses:{mpMax:50},price:380, desc:'+50 к макс. MP' },
-  amulet_crit:       { type:'accessory', slot:'amulet', ico:'<img class="gi" src="assets/icons/polar-star.svg" alt="">', name:'Амулет острого глаза', bonuses:{crit:15}, price:550, desc:'+15% шанс крита' },
-  amulet_phoenix:    { type:'accessory', slot:'amulet', ico:'<img class="gi" src="assets/icons/flame.svg" alt="">', name:'Амулет феникса',   bonuses:{regen:5},  price:1200, desc:'Регенерация 5 HP/ход' },
+  amulet_hp:         { type:'accessory', slot:'amulet', ico:'<img decoding="async" class="gi" src="assets/icons/prayer-beads.svg" alt="">', name:'Амулет жизни',     bonuses:{hpMax:50},price:380, desc:'+50 к макс. HP' },
+  amulet_mp:         { type:'accessory', slot:'amulet', ico:'<img decoding="async" class="gi" src="assets/icons/prayer-beads.svg" alt="">', name:'Амулет маны',      bonuses:{mpMax:50},price:380, desc:'+50 к макс. MP' },
+  amulet_crit:       { type:'accessory', slot:'amulet', ico:'<img decoding="async" class="gi" src="assets/icons/polar-star.svg" alt="">', name:'Амулет острого глаза', bonuses:{crit:15}, price:550, desc:'+15% шанс крита' },
+  amulet_phoenix:    { type:'accessory', slot:'amulet', ico:'<img decoding="async" class="gi" src="assets/icons/flame.svg" alt="">', name:'Амулет феникса',   bonuses:{regen:5},  price:1200, desc:'Регенерация 5 HP/ход' },
   // Артефакты
-  art_orb:           { type:'accessory', slot:'artifact', ico:'<img class="gi" src="assets/icons/crystal-ball.svg" alt="">', name:'Сфера магии',      bonuses:{int:3,mpMax:30}, price:420, desc:'+3 INT, +30 MP' },
-  art_skull:         { type:'accessory', slot:'artifact', ico:'<img class="gi" src="assets/icons/skull-crossed-bones.svg" alt="">', name:'Череп воина',      bonuses:{str:3,hpMax:30}, price:420, desc:'+3 STR, +30 HP' },
-  art_compass:       { type:'accessory', slot:'artifact', ico:'<img class="gi" src="assets/icons/polar-star.svg" alt="">', name:'Компас удачи',     bonuses:{crit:10,agi:2}, price:680, desc:'+10% крит, +2 AGI' },
-  art_ankh:          { type:'accessory', slot:'artifact', ico:'<img class="gi" src="assets/icons/heart-plus.svg" alt="">', name:'Анкх жизни',       bonuses:{regen:3,hpMax:50}, price:1500, desc:'+3 регена, +50 HP' },
-  art_eye:           { type:'accessory', slot:'artifact', ico:'<img class="gi" src="assets/icons/dragon-head.svg" alt="">', name:'Око дракона',      bonuses:{int:5,str:5}, price:2400, desc:'+5 INT, +5 STR' },
+  art_orb:           { type:'accessory', slot:'artifact', ico:'<img decoding="async" class="gi" src="assets/icons/crystal-ball.svg" alt="">', name:'Сфера магии',      bonuses:{int:3,mpMax:30}, price:420, desc:'+3 INT, +30 MP' },
+  art_skull:         { type:'accessory', slot:'artifact', ico:'<img decoding="async" class="gi" src="assets/icons/skull-crossed-bones.svg" alt="">', name:'Череп воина',      bonuses:{str:3,hpMax:30}, price:420, desc:'+3 STR, +30 HP' },
+  art_compass:       { type:'accessory', slot:'artifact', ico:'<img decoding="async" class="gi" src="assets/icons/polar-star.svg" alt="">', name:'Компас удачи',     bonuses:{crit:10,agi:2}, price:680, desc:'+10% крит, +2 AGI' },
+  art_ankh:          { type:'accessory', slot:'artifact', ico:'<img decoding="async" class="gi" src="assets/icons/heart-plus.svg" alt="">', name:'Анкх жизни',       bonuses:{regen:3,hpMax:50}, price:1500, desc:'+3 регена, +50 HP' },
+  art_eye:           { type:'accessory', slot:'artifact', ico:'<img decoding="async" class="gi" src="assets/icons/dragon-head.svg" alt="">', name:'Око дракона',      bonuses:{int:5,str:5}, price:2400, desc:'+5 INT, +5 STR' },
   // Расходники
-  potion_s:          { type:'consumable', ico:'<img class="gi" src="assets/icons/round-bottom-flask.svg" alt="">', name:'Малое зелье лечения',   price:15,  desc:'+30 HP', use:p=>{p.hp=Math.min(eff('hpMax'),p.hp+30); return 'Восстановлено 30 HP.';} },
-  potion_m:          { type:'consumable', ico:'<img class="gi" src="assets/icons/potion-ball.svg" alt="">', name:'Среднее зелье лечения', price:45,  desc:'+70 HP', use:p=>{p.hp=Math.min(eff('hpMax'),p.hp+70); return 'Восстановлено 70 HP.';} },
-  potion_l:          { type:'consumable', ico:'<img class="gi" src="assets/icons/glass-shot.svg" alt="">', name:'Большое зелье лечения', price:120, desc:'+150 HP',use:p=>{p.hp=Math.min(eff('hpMax'),p.hp+150); return 'Восстановлено 150 HP.';} },
-  mana_s:            { type:'consumable', ico:'<img class="gi" src="assets/icons/hearts.svg" alt="">', name:'Малое зелье маны',      price:20,  desc:'+30 MP', use:p=>{p.mp=Math.min(eff('mpMax'),p.mp+30); return 'Восстановлено 30 MP.';} },
-  mana_m:            { type:'consumable', ico:'<img class="gi" src="assets/icons/cut-diamond.svg" alt="">', name:'Среднее зелье маны',    price:55,  desc:'+70 MP', use:p=>{p.mp=Math.min(eff('mpMax'),p.mp+70); return 'Восстановлено 70 MP.';} },
-  elixir:            { type:'consumable', ico:'<img class="gi" src="assets/icons/dna1.svg" alt="">', name:'Эликсир жизни',         price:280, desc:'Полное HP/MP', use:p=>{p.hp=eff('hpMax');p.mp=eff('mpMax'); return 'Восстановлено всё.';} },
-  bomb:              { type:'consumable', ico:'<img class="gi" src="assets/icons/unlit-bomb.svg" alt="">', name:'Огненная бомба',        price:65,  desc:'35 урона ВСЕМ врагам', combat:true, aoe:true, dmg:35 },
+  potion_s:          { type:'consumable', ico:'<img decoding="async" class="gi" src="assets/icons/round-bottom-flask.svg" alt="">', name:'Малое зелье лечения',   price:15,  desc:'+30 HP', use:p=>{p.hp=Math.min(eff('hpMax'),p.hp+30); return 'Восстановлено 30 HP.';} },
+  potion_m:          { type:'consumable', ico:'<img decoding="async" class="gi" src="assets/icons/potion-ball.svg" alt="">', name:'Среднее зелье лечения', price:45,  desc:'+70 HP', use:p=>{p.hp=Math.min(eff('hpMax'),p.hp+70); return 'Восстановлено 70 HP.';} },
+  potion_l:          { type:'consumable', ico:'<img decoding="async" class="gi" src="assets/icons/glass-shot.svg" alt="">', name:'Большое зелье лечения', price:120, desc:'+150 HP',use:p=>{p.hp=Math.min(eff('hpMax'),p.hp+150); return 'Восстановлено 150 HP.';} },
+  mana_s:            { type:'consumable', ico:'<img decoding="async" class="gi" src="assets/icons/hearts.svg" alt="">', name:'Малое зелье маны',      price:20,  desc:'+30 MP', use:p=>{p.mp=Math.min(eff('mpMax'),p.mp+30); return 'Восстановлено 30 MP.';} },
+  mana_m:            { type:'consumable', ico:'<img decoding="async" class="gi" src="assets/icons/cut-diamond.svg" alt="">', name:'Среднее зелье маны',    price:55,  desc:'+70 MP', use:p=>{p.mp=Math.min(eff('mpMax'),p.mp+70); return 'Восстановлено 70 MP.';} },
+  elixir:            { type:'consumable', ico:'<img decoding="async" class="gi" src="assets/icons/dna1.svg" alt="">', name:'Эликсир жизни',         price:280, desc:'Полное HP/MP', use:p=>{p.hp=eff('hpMax');p.mp=eff('mpMax'); return 'Восстановлено всё.';} },
+  bomb:              { type:'consumable', ico:'<img decoding="async" class="gi" src="assets/icons/unlit-bomb.svg" alt="">', name:'Огненная бомба',        price:65,  desc:'35 урона ВСЕМ врагам', combat:true, aoe:true, dmg:35 },
   // Квестовые
-  rat_tail:          { type:'quest', ico:'<img class="gi" src="assets/icons/rat.svg" alt="">', name:'Хвост гигантской крысы' },
-  heart:             { type:'quest', ico:'<img class="gi" src="assets/icons/heart-plus.svg" alt=""><img class="gi" src="assets/icons/flame.svg" alt="">', name:'Сердце утопленника' },
-  golem_core:        { type:'quest', ico:'<img class="gi" src="assets/icons/cut-diamond.svg" alt="">', name:'Ядро каменного стража' },
-  lich_skull:        { type:'quest', ico:'<img class="gi" src="assets/icons/skull-crossed-bones.svg" alt="">', name:'Череп Лича' },
-  ice_shard:         { type:'quest', ico:'<img class="gi" src="assets/icons/snowflake-1.svg" alt="">', name:'Осколок Ледяного Короля' },
-  phoenix_feather:   { type:'quest', ico:'<img class="gi" src="assets/icons/feather.svg" alt="">', name:'Перо феникса' },
+  rat_tail:          { type:'quest', ico:'<img decoding="async" class="gi" src="assets/icons/rat.svg" alt="">', name:'Хвост гигантской крысы' },
+  heart:             { type:'quest', ico:'<img decoding="async" class="gi" src="assets/icons/heart-plus.svg" alt=""><img decoding="async" class="gi" src="assets/icons/flame.svg" alt="">', name:'Сердце утопленника' },
+  golem_core:        { type:'quest', ico:'<img decoding="async" class="gi" src="assets/icons/cut-diamond.svg" alt="">', name:'Ядро каменного стража' },
+  lich_skull:        { type:'quest', ico:'<img decoding="async" class="gi" src="assets/icons/skull-crossed-bones.svg" alt="">', name:'Череп Лича' },
+  ice_shard:         { type:'quest', ico:'<img decoding="async" class="gi" src="assets/icons/snowflake-1.svg" alt="">', name:'Осколок Ледяного Короля' },
+  phoenix_feather:   { type:'quest', ico:'<img decoding="async" class="gi" src="assets/icons/feather.svg" alt="">', name:'Перо феникса' },
   // Торговые ресурсы
-  r_fur:   { type:'resource', ico:'<img class="gi" src="assets/icons/wolf-head.svg" alt="">', name:'Мех волка',       base:22,  desc:'Грубый мех. Ценится на севере.' },
-  r_herb:  { type:'resource', ico:'<img class="gi" src="assets/icons/pine-tree.svg" alt="">', name:'Пучок трав',       base:14,  desc:'Связка целебных трав.' },
-  r_ore:   { type:'resource', ico:'<img class="gi" src="assets/icons/mountains.svg" alt="">', name:'Железная руда',    base:38,  desc:'Грубая руда для кузниц.' },
-  r_silk:  { type:'resource', ico:'<img class="gi" src="assets/icons/kimono.svg" alt="">', name:'Рулон шёлка',       base:95,  desc:'Тонкая ткань из дальних земель.' },
-  r_gem:   { type:'resource', ico:'<img class="gi" src="assets/icons/cut-diamond.svg" alt="">', name:'Сырой самоцвет',  base:160, desc:'Неогранённый камень.' },
-  r_spice: { type:'resource', ico:'<img class="gi" src="assets/icons/flame.svg" alt="">', name:'Пряности',           base:55,  desc:'Жгучие специи.' }
+  r_fur:   { type:'resource', ico:'<img decoding="async" class="gi" src="assets/icons/wolf-head.svg" alt="">', name:'Мех волка',       base:22,  desc:'Грубый мех. Ценится на севере.' },
+  r_herb:  { type:'resource', ico:'<img decoding="async" class="gi" src="assets/icons/pine-tree.svg" alt="">', name:'Пучок трав',       base:14,  desc:'Связка целебных трав.' },
+  r_ore:   { type:'resource', ico:'<img decoding="async" class="gi" src="assets/icons/mountains.svg" alt="">', name:'Железная руда',    base:38,  desc:'Грубая руда для кузниц.' },
+  r_silk:  { type:'resource', ico:'<img decoding="async" class="gi" src="assets/icons/kimono.svg" alt="">', name:'Рулон шёлка',       base:95,  desc:'Тонкая ткань из дальних земель.' },
+  r_gem:   { type:'resource', ico:'<img decoding="async" class="gi" src="assets/icons/cut-diamond.svg" alt="">', name:'Сырой самоцвет',  base:160, desc:'Неогранённый камень.' },
+  r_spice: { type:'resource', ico:'<img decoding="async" class="gi" src="assets/icons/flame.svg" alt="">', name:'Пряности',           base:55,  desc:'Жгучие специи.' }
 };
 
 const SPELLS = {
-  fireball:   { name:'Огненный шар',     ico:'<img class="gi" src="assets/icons/flame.svg" alt="">', cost:12, dmg:[14,22], desc:'Мощный удар огнём', cls:['mage'] },
-  iceshard:   { name:'Ледяной осколок',  ico:'<img class="gi" src="assets/icons/snowflake-1.svg" alt="">', cost:8,  dmg:[9,15],  desc:'Холодный удар', cls:['mage'] },
-  lightning:  { name:'Цепная молния',    ico:'<img class="gi" src="assets/icons/lightning-bolt.svg" alt="">', cost:18, dmg:[22,32], desc:'Полный урон цели + 60% по остальным', cls:['mage'], aoe:'chain', chain:0.6 },
-  frostnova:  { name:'Ледяной удар',  ico:'<img class="gi" src="assets/icons/frozen-orb.svg" alt="">', cost:22, dmg:[16,24], desc:'70% урона по всем врагам', cls:['mage'], aoe:'all', mult:0.7 },
-  heal:       { name:'Исцеление',        ico:'<img class="gi" src="assets/icons/sparkles.svg" alt="">', cost:10, heal:[18,28], desc:'Восстановить здоровье', cls:['mage','warrior','rogue'] },
-  poison:     { name:'Отравленный клинок', ico:'<img class="gi" src="assets/icons/death-skull.svg" alt="">', cost:6, dmg:[10,16], desc:'Подлый удар ядом', cls:['rogue'] },
-  shadow:     { name:'Удар из тени',     ico:'<img class="gi" src="assets/icons/moon.svg" alt="">', cost:14, dmg:[18,28], desc:'Внезапный удар', cls:['rogue'] },
-  smokebomb:  { name:'Дымовая бомба',    ico:'<img class="gi" src="assets/icons/wind-slap.svg" alt="">', cost:16, dmg:[10,16], desc:'Слепит и бьёт всех (50%)', cls:['rogue'], aoe:'all', mult:0.5 },
-  rage:       { name:'Боевой клич',      ico:'<img class="gi" src="assets/icons/angry-eyes.svg" alt="">', cost:8,  dmg:[12,20], desc:'Яростная атака', cls:['warrior'] },
-  cleave:     { name:'Рассекающий удар', ico:'<img class="gi" src="assets/icons/crossed-swords.svg" alt="">', cost:14, dmg:[20,30], desc:'Цель + 50% по соседям', cls:['warrior'], aoe:'chain', chain:0.5 },
-  whirlwind:  { name:'Вихрь клинков',    ico:'<img class="gi" src="assets/icons/vortex.svg" alt="">', cost:22, dmg:[18,28], desc:'60% урона по всем', cls:['warrior'], aoe:'all', mult:0.6 }
+  fireball:   { name:'Огненный шар',     ico:'<img decoding="async" class="gi" src="assets/icons/flame.svg" alt="">', cost:12, dmg:[14,22], desc:'Мощный удар огнём', cls:['mage'] },
+  iceshard:   { name:'Ледяной осколок',  ico:'<img decoding="async" class="gi" src="assets/icons/snowflake-1.svg" alt="">', cost:8,  dmg:[9,15],  desc:'Холодный удар', cls:['mage'] },
+  lightning:  { name:'Цепная молния',    ico:'<img decoding="async" class="gi" src="assets/icons/lightning-bolt.svg" alt="">', cost:18, dmg:[22,32], desc:'Полный урон цели + 60% по остальным', cls:['mage'], aoe:'chain', chain:0.6 },
+  frostnova:  { name:'Ледяной удар',  ico:'<img decoding="async" class="gi" src="assets/icons/frozen-orb.svg" alt="">', cost:22, dmg:[16,24], desc:'70% урона по всем врагам', cls:['mage'], aoe:'all', mult:0.7 },
+  heal:       { name:'Исцеление',        ico:'<img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt="">', cost:10, heal:[18,28], desc:'Восстановить здоровье', cls:['mage','warrior','rogue'] },
+  poison:     { name:'Отравленный клинок', ico:'<img decoding="async" class="gi" src="assets/icons/death-skull.svg" alt="">', cost:6, dmg:[10,16], desc:'Подлый удар ядом', cls:['rogue'] },
+  shadow:     { name:'Удар из тени',     ico:'<img decoding="async" class="gi" src="assets/icons/moon.svg" alt="">', cost:14, dmg:[18,28], desc:'Внезапный удар', cls:['rogue'] },
+  smokebomb:  { name:'Дымовая бомба',    ico:'<img decoding="async" class="gi" src="assets/icons/wind-slap.svg" alt="">', cost:16, dmg:[10,16], desc:'Слепит и бьёт всех (50%)', cls:['rogue'], aoe:'all', mult:0.5 },
+  rage:       { name:'Боевой клич',      ico:'<img decoding="async" class="gi" src="assets/icons/angry-eyes.svg" alt="">', cost:8,  dmg:[12,20], desc:'Яростная атака', cls:['warrior'] },
+  cleave:     { name:'Рассекающий удар', ico:'<img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt="">', cost:14, dmg:[20,30], desc:'Цель + 50% по соседям', cls:['warrior'], aoe:'chain', chain:0.5 },
+  whirlwind:  { name:'Вихрь клинков',    ico:'<img decoding="async" class="gi" src="assets/icons/vortex.svg" alt="">', cost:22, dmg:[18,28], desc:'60% урона по всем', cls:['warrior'], aoe:'all', mult:0.6 }
 };
 
 const CLASSES = {
-  warrior: { ico:'<img class="gi" src="assets/icons/barbarian.svg" alt="">', name:'Воин', hp:140, mp:30,  str:8, agi:4, int:2, weapon:'w_starter_sword' },
-  mage:    { ico:'<img class="gi" src="assets/icons/wizard-face.svg" alt="">', name:'Маг',  hp:90,  mp:100, str:3, agi:4, int:9, weapon:'w_starter_staff' },
-  rogue:   { ico:'<img class="gi" src="assets/icons/ninja-head.svg" alt="">', name:'Плут', hp:110, mp:50,  str:5, agi:9, int:4, weapon:'w_starter_daggers' }
+  warrior: { ico:'<img decoding="async" class="gi" src="assets/icons/barbarian.svg" alt="">', name:'Воин', hp:140, mp:30,  str:8, agi:4, int:2, weapon:'w_starter_sword' },
+  mage:    { ico:'<img decoding="async" class="gi" src="assets/icons/wizard-face.svg" alt="">', name:'Маг',  hp:90,  mp:100, str:3, agi:4, int:9, weapon:'w_starter_staff' },
+  rogue:   { ico:'<img decoding="async" class="gi" src="assets/icons/ninja-head.svg" alt="">', name:'Плут', hp:110, mp:50,  str:5, agi:9, int:4, weapon:'w_starter_daggers' }
 };
 
 // ==================== ТОРГОВЦЫ РЕСУРСОВ ====================
@@ -820,7 +393,7 @@ function renderResourceGrid() {
       <td style="padding:6px 4px">${it.ico} ${it.name}</td>
       <td style="padding:6px 4px;text-align:center">${qty}</td>
       <td style="padding:6px 4px;text-align:center">${stockLbl}</td>
-      <td style="padding:6px 4px;text-align:right"><b style="color:#f4d03f">${price}</b> <img class="gi" src="assets/icons/two-coins.svg" alt=""><br>${pctLbl}</td>
+      <td style="padding:6px 4px;text-align:right"><b style="color:#f4d03f">${price}</b> <img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt=""><br>${pctLbl}</td>
       <td style="padding:6px 4px;text-align:center">${qtyCtrl}</td>
       <td style="padding:6px 4px;text-align:right;white-space:nowrap">
         <button class="act" style="padding:3px 8px;font-size:11px" onclick="tradeBuy('${rid}')" ${canBuy?'':'disabled'}>Купить</button>
@@ -832,7 +405,7 @@ function renderResourceGrid() {
   }).join('');
   const newsHtml = (MARKET.news && MARKET.news.length)
     ? MARKET.news.map(n => {
-        const ico = n.kind==='up' ? '<img class="gi" src="assets/icons/lightning-bolt.svg" alt="">' : '<img class="gi" src="assets/icons/feather.svg" alt="">';
+        const ico = n.kind==='up' ? '<img decoding="async" class="gi" src="assets/icons/lightning-bolt.svg" alt="">' : '<img decoding="async" class="gi" src="assets/icons/feather.svg" alt="">';
         const color = n.kind==='up' ? '#cf4030' : '#6abe30';
         return `<div style="color:#d4b87a;font-size:11px;padding:3px 0;border-left:3px solid ${color};padding-left:8px;margin:2px 0">${ico} ${n.text}</div>`;
       }).join('')
@@ -930,7 +503,7 @@ async function tradeBuy(rid) {
   if (!j) { renderResourceGrid(); return; }
   P.gold = (typeof j.gold === 'number') ? j.gold : (P.gold - j.total);
   if (!j.resources) P.inv[rid] = (P.inv[rid]||0) + j.qty;
-  log(`<span class="good"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено у ${TRADERS[loc].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${j.qty} за ${j.total}.</span>`);
+  log(`<span class="good"><img decoding="async" class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено у ${TRADERS[loc].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${j.qty} за ${j.total}.</span>`);
   save(); renderResourceGrid(); render();
 }
 function qtyStep(id, delta) {
@@ -950,7 +523,7 @@ async function tradeBuyMax(rid) {
   if (!j) { renderResourceGrid(); return; }
   P.gold = (typeof j.gold === 'number') ? j.gold : (P.gold - j.total);
   if (!j.resources) P.inv[rid] = (P.inv[rid]||0) + j.qty;
-  log(`<span class="good"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено у ${TRADERS[loc].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${j.qty} за ${j.total}.</span>`);
+  log(`<span class="good"><img decoding="async" class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено у ${TRADERS[loc].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${j.qty} за ${j.total}.</span>`);
   save(); renderResourceGrid(); render();
 }
 async function tradeSellAll(rid) {
@@ -960,7 +533,7 @@ async function tradeSellAll(rid) {
   if (!j) { renderResourceGrid(); return; }
   if (!j.resources) { P.inv[rid] = (P.inv[rid]||0) - j.qty; if (P.inv[rid]<=0) delete P.inv[rid]; }
   P.gold = (typeof j.gold === 'number') ? j.gold : (P.gold + j.total);
-  log(`<span class="info"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Продано ${TRADERS[loc].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${j.qty} за ${j.total} (весь стак).</span>`);
+  log(`<span class="info"><img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt=""> Продано ${TRADERS[loc].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${j.qty} за ${j.total} (весь стак).</span>`);
   save(); renderResourceGrid(); render();
 }
 async function tradeSell(rid) {
@@ -973,64 +546,64 @@ async function tradeSell(rid) {
   if (!j) { renderResourceGrid(); return; }
   if (!j.resources) { P.inv[rid] = (P.inv[rid]||0) - j.qty; if (P.inv[rid]<=0) delete P.inv[rid]; }
   P.gold = (typeof j.gold === 'number') ? j.gold : (P.gold + j.total);
-  log(`<span class="info"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Продано ${TRADERS[loc].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${j.qty} за ${j.total}.</span>`);
+  log(`<span class="info"><img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt=""> Продано ${TRADERS[loc].name}: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${j.qty} за ${j.total}.</span>`);
   save(); renderResourceGrid(); render();
 }
 
 // ==================== ВРАГИ ====================
 const ENEMIES = [
-  { id:'rat',     name:'Гигантская крыса',     ico:'<img class="gi" src="assets/icons/rat.svg" alt="">', hp:25,  dmg:[2,5],   xp:8,   gold:[2,6],    lvl:1, loc:['village','forest'], drops:{rat_tail:0.6}, resources:{r_herb:[0,1]} },
-  { id:'gob',     name:'Гоблин-разведчик',     ico:'<img class="gi" src="assets/icons/ogre.svg" alt="">', hp:40,  dmg:[4,8],   xp:18,  gold:[5,12],   lvl:2, loc:['forest','cave'], resources:{r_ore:[0,1]} },
-  { id:'wolf',    name:'Тёмный волк',          ico:'<img class="gi" src="assets/icons/wolf-head.svg" alt="">', hp:55,  dmg:[6,11],  xp:28,  gold:[4,10],   lvl:3, loc:['forest'], resources:{r_fur:[1,2]} },
-  { id:'spider',  name:'Лесной паук',          ico:'<img class="gi" src="assets/icons/spider-face.svg" alt="">', hp:48,  dmg:[5,10],  xp:24,  gold:[3,9],    lvl:3, loc:['forest','swamp'], resources:{r_herb:[0,1],r_silk:[0,1]} },
-  { id:'snake',   name:'Болотная гадюка',      ico:'<img class="gi" src="assets/icons/snake.svg" alt="">', hp:50,  dmg:[7,12],  xp:30,  gold:[5,11],   lvl:3, loc:['swamp'], resources:{r_herb:[1,2]} },
-  { id:'kikimora',name:'Кикимора',             ico:'<img class="gi" src="assets/icons/fairy.svg" alt="">', hp:65,  dmg:[8,13],  xp:38,  gold:[8,15],   lvl:4, loc:['swamp'], resources:{r_herb:[1,2]} },
-  { id:'drowned', name:'Утопленник',           ico:'<img class="gi" src="assets/icons/shambling-zombie.svg" alt="">', hp:70,  dmg:[9,14],  xp:42,  gold:[6,14],   lvl:4, loc:['swamp'], drops:{heart:0.4}, resources:{r_herb:[0,1]} },
-  { id:'skel',    name:'Скелет-воин',          ico:'<img class="gi" src="assets/icons/skull-crossed-bones.svg" alt="">', hp:75,  dmg:[8,14],  xp:45,  gold:[10,20],  lvl:4, loc:['cave','crypt','ruins'], resources:{r_ore:[0,1]} },
-  { id:'bandit',  name:'Лесной разбойник',     ico:'<img class="gi" src="assets/icons/ninja-head.svg" alt="">', hp:85,  dmg:[10,16], xp:55,  gold:[15,30],  lvl:5, loc:['forest'], resources:{r_silk:[0,1]} },
-  { id:'smuggler',name:'Контрабандист',        ico:'<img class="gi" src="assets/icons/bandit.svg" alt="">', hp:95,  dmg:[11,17], xp:65,  gold:[18,32],  lvl:5, loc:['port','forest'], resources:{r_silk:[1,2],r_spice:[0,1]} },
-  { id:'sailor',  name:'Пьяный матрос',        ico:'<img class="gi" src="assets/icons/vomiting.svg" alt="">', hp:80,  dmg:[9,15],  xp:50,  gold:[20,35],  lvl:5, loc:['port'], resources:{r_spice:[0,1],r_silk:[0,1]} },
-  { id:'orc',     name:'Орк-берсерк',          ico:'<img class="gi" src="assets/icons/goblin-head.svg" alt="">', hp:110, dmg:[12,20], xp:80,  gold:[20,40],  lvl:6, loc:['cave','crypt','ruins'], resources:{r_ore:[1,2]} },
-  { id:'ghost',   name:'Призрак',              ico:'<img class="gi" src="assets/icons/ghost.svg" alt="">', hp:95,  dmg:[14,22], xp:90,  gold:[18,35],  lvl:7, loc:['crypt','ruins'], resources:{r_gem:[0,1]} },
-  { id:'mummy',   name:'Мумия',                ico:'<img class="gi" src="assets/icons/djinn.svg" alt="">', hp:120, dmg:[13,21], xp:95,  gold:[22,40],  lvl:7, loc:['crypt'], resources:{r_gem:[0,1],r_silk:[0,1]} },
-  { id:'guardian',name:'Древний страж',        ico:'<img class="gi" src="assets/icons/stone-tower.svg" alt="">', hp:130, dmg:[15,23], xp:105, gold:[28,48],  lvl:8, loc:['ruins'], resources:{r_gem:[1,2],r_ore:[0,1]} },
-  { id:'troll',   name:'Пещерный тролль',      ico:'<img class="gi" src="assets/icons/daemon-skull.svg" alt="">', hp:160, dmg:[16,26], xp:130, gold:[35,60],  lvl:8, loc:['cave'], resources:{r_ore:[1,3]} },
-  { id:'snowwolf',name:'Снежный волк',         ico:'<img class="gi" src="assets/icons/wolf-head.svg" alt="">', hp:140, dmg:[15,24], xp:120, gold:[30,55],  lvl:8, loc:['mountains'], resources:{r_fur:[1,2]} },
-  { id:'yeti',    name:'Йети',                 ico:'<img class="gi" src="assets/icons/gorilla.svg" alt="">', hp:200, dmg:[19,29], xp:160, gold:[40,75],  lvl:9, loc:['mountains'], resources:{r_fur:[2,3]} },
-  { id:'iceelem', name:'Ледяной элементаль',   ico:'<img class="gi" src="assets/icons/snowflake-1.svg" alt="">', hp:180, dmg:[18,30], xp:170, gold:[45,80],  lvl:10,loc:['mountains'], resources:{r_gem:[0,1],r_ore:[1,2]} },
-  { id:'imp',     name:'Огненный имп',         ico:'<img class="gi" src="assets/icons/imp-laugh.svg" alt="">', hp:170, dmg:[20,30], xp:175, gold:[40,72],  lvl:10,loc:['volcano'], resources:{r_spice:[1,2]} },
-  { id:'lava',    name:'Лавовый элементаль',   ico:'<img class="gi" src="assets/icons/flame.svg" alt="">', hp:230, dmg:[22,34], xp:210, gold:[55,90],  lvl:11,loc:['volcano'], resources:{r_spice:[1,2],r_gem:[0,1]} },
-  { id:'salamander',name:'Огненная саламандра',ico:'<img class="gi" src="assets/icons/lizardman.svg" alt="">', hp:200, dmg:[24,32], xp:200, gold:[50,85],  lvl:11,loc:['volcano'], resources:{r_spice:[1,3]} },
+  { id:'rat',     name:'Гигантская крыса',     ico:'<img decoding="async" class="gi" src="assets/icons/rat.svg" alt="">', hp:25,  dmg:[2,5],   xp:8,   gold:[2,6],    lvl:1, loc:['village','forest'], drops:{rat_tail:0.6}, resources:{r_herb:[0,1]} },
+  { id:'gob',     name:'Гоблин-разведчик',     ico:'<img decoding="async" class="gi" src="assets/icons/ogre.svg" alt="">', hp:40,  dmg:[4,8],   xp:18,  gold:[5,12],   lvl:2, loc:['forest','cave'], resources:{r_ore:[0,1]} },
+  { id:'wolf',    name:'Тёмный волк',          ico:'<img decoding="async" class="gi" src="assets/icons/wolf-head.svg" alt="">', hp:55,  dmg:[6,11],  xp:28,  gold:[4,10],   lvl:3, loc:['forest'], resources:{r_fur:[1,2]} },
+  { id:'spider',  name:'Лесной паук',          ico:'<img decoding="async" class="gi" src="assets/icons/spider-face.svg" alt="">', hp:48,  dmg:[5,10],  xp:24,  gold:[3,9],    lvl:3, loc:['forest','swamp'], resources:{r_herb:[0,1],r_silk:[0,1]} },
+  { id:'snake',   name:'Болотная гадюка',      ico:'<img decoding="async" class="gi" src="assets/icons/snake.svg" alt="">', hp:50,  dmg:[7,12],  xp:30,  gold:[5,11],   lvl:3, loc:['swamp'], resources:{r_herb:[1,2]} },
+  { id:'kikimora',name:'Кикимора',             ico:'<img decoding="async" class="gi" src="assets/icons/fairy.svg" alt="">', hp:65,  dmg:[8,13],  xp:38,  gold:[8,15],   lvl:4, loc:['swamp'], resources:{r_herb:[1,2]} },
+  { id:'drowned', name:'Утопленник',           ico:'<img decoding="async" class="gi" src="assets/icons/shambling-zombie.svg" alt="">', hp:70,  dmg:[9,14],  xp:42,  gold:[6,14],   lvl:4, loc:['swamp'], drops:{heart:0.4}, resources:{r_herb:[0,1]} },
+  { id:'skel',    name:'Скелет-воин',          ico:'<img decoding="async" class="gi" src="assets/icons/skull-crossed-bones.svg" alt="">', hp:75,  dmg:[8,14],  xp:45,  gold:[10,20],  lvl:4, loc:['cave','crypt','ruins'], resources:{r_ore:[0,1]} },
+  { id:'bandit',  name:'Лесной разбойник',     ico:'<img decoding="async" class="gi" src="assets/icons/ninja-head.svg" alt="">', hp:85,  dmg:[10,16], xp:55,  gold:[15,30],  lvl:5, loc:['forest'], resources:{r_silk:[0,1]} },
+  { id:'smuggler',name:'Контрабандист',        ico:'<img decoding="async" class="gi" src="assets/icons/bandit.svg" alt="">', hp:95,  dmg:[11,17], xp:65,  gold:[18,32],  lvl:5, loc:['port','forest'], resources:{r_silk:[1,2],r_spice:[0,1]} },
+  { id:'sailor',  name:'Пьяный матрос',        ico:'<img decoding="async" class="gi" src="assets/icons/vomiting.svg" alt="">', hp:80,  dmg:[9,15],  xp:50,  gold:[20,35],  lvl:5, loc:['port'], resources:{r_spice:[0,1],r_silk:[0,1]} },
+  { id:'orc',     name:'Орк-берсерк',          ico:'<img decoding="async" class="gi" src="assets/icons/goblin-head.svg" alt="">', hp:110, dmg:[12,20], xp:80,  gold:[20,40],  lvl:6, loc:['cave','crypt','ruins'], resources:{r_ore:[1,2]} },
+  { id:'ghost',   name:'Призрак',              ico:'<img decoding="async" class="gi" src="assets/icons/ghost.svg" alt="">', hp:95,  dmg:[14,22], xp:90,  gold:[18,35],  lvl:7, loc:['crypt','ruins'], resources:{r_gem:[0,1]} },
+  { id:'mummy',   name:'Мумия',                ico:'<img decoding="async" class="gi" src="assets/icons/djinn.svg" alt="">', hp:120, dmg:[13,21], xp:95,  gold:[22,40],  lvl:7, loc:['crypt'], resources:{r_gem:[0,1],r_silk:[0,1]} },
+  { id:'guardian',name:'Древний страж',        ico:'<img decoding="async" class="gi" src="assets/icons/stone-tower.svg" alt="">', hp:130, dmg:[15,23], xp:105, gold:[28,48],  lvl:8, loc:['ruins'], resources:{r_gem:[1,2],r_ore:[0,1]} },
+  { id:'troll',   name:'Пещерный тролль',      ico:'<img decoding="async" class="gi" src="assets/icons/daemon-skull.svg" alt="">', hp:160, dmg:[16,26], xp:130, gold:[35,60],  lvl:8, loc:['cave'], resources:{r_ore:[1,3]} },
+  { id:'snowwolf',name:'Снежный волк',         ico:'<img decoding="async" class="gi" src="assets/icons/wolf-head.svg" alt="">', hp:140, dmg:[15,24], xp:120, gold:[30,55],  lvl:8, loc:['mountains'], resources:{r_fur:[1,2]} },
+  { id:'yeti',    name:'Йети',                 ico:'<img decoding="async" class="gi" src="assets/icons/gorilla.svg" alt="">', hp:200, dmg:[19,29], xp:160, gold:[40,75],  lvl:9, loc:['mountains'], resources:{r_fur:[2,3]} },
+  { id:'iceelem', name:'Ледяной элементаль',   ico:'<img decoding="async" class="gi" src="assets/icons/snowflake-1.svg" alt="">', hp:180, dmg:[18,30], xp:170, gold:[45,80],  lvl:10,loc:['mountains'], resources:{r_gem:[0,1],r_ore:[1,2]} },
+  { id:'imp',     name:'Огненный имп',         ico:'<img decoding="async" class="gi" src="assets/icons/imp-laugh.svg" alt="">', hp:170, dmg:[20,30], xp:175, gold:[40,72],  lvl:10,loc:['volcano'], resources:{r_spice:[1,2]} },
+  { id:'lava',    name:'Лавовый элементаль',   ico:'<img decoding="async" class="gi" src="assets/icons/flame.svg" alt="">', hp:230, dmg:[22,34], xp:210, gold:[55,90],  lvl:11,loc:['volcano'], resources:{r_spice:[1,2],r_gem:[0,1]} },
+  { id:'salamander',name:'Огненная саламандра',ico:'<img decoding="async" class="gi" src="assets/icons/lizardman.svg" alt="">', hp:200, dmg:[24,32], xp:200, gold:[50,85],  lvl:11,loc:['volcano'], resources:{r_spice:[1,3]} },
   // Боссы
-  { id:'golem',   name:'Каменный страж',       ico:'<img class="gi" src="assets/icons/stone-tower.svg" alt="">', hp:280, dmg:[18,28], xp:280, gold:[100,150],lvl:9, loc:['ruins'],     boss:true, drops:{golem_core:1}, resources:{r_ore:[3,5],r_gem:[2,4]} },
-  { id:'lich',    name:'Лич Морхольд',         ico:'<img class="gi" src="assets/icons/death-skull.svg" alt="">', hp:380, dmg:[22,34], xp:420, gold:[150,250],lvl:10,loc:['crypt'],     boss:true, drops:{lich_skull:1}, resources:{r_gem:[3,5],r_silk:[2,3],r_herb:[2,3]} },
-  { id:'snowking',name:'Ледяной Король',       ico:'<img class="gi" src="assets/icons/yeti.svg" alt="">', hp:450, dmg:[24,38], xp:520, gold:[200,300],lvl:12,loc:['mountains'], boss:true, drops:{ice_shard:1}, resources:{r_fur:[4,6],r_gem:[2,3]} },
-  { id:'phoenix', name:'Древний Феникс',       ico:'<img class="gi" src="assets/icons/eagle-emblem.svg" alt="">', hp:500, dmg:[26,40], xp:600, gold:[250,350],lvl:13,loc:['volcano'],   boss:true, drops:{phoenix_feather:1}, resources:{r_spice:[4,6],r_gem:[2,4]} },
-  { id:'dragon',  name:'Древний Дракон',       ico:'<img class="gi" src="assets/icons/dragon-head.svg" alt="">', hp:700, dmg:[30,46], xp:1000,gold:[500,750],lvl:16,loc:['lair'],      boss:true, resources:{r_gem:[5,8],r_spice:[3,5],r_silk:[3,5],r_ore:[3,5]} }
+  { id:'golem',   name:'Каменный страж',       ico:'<img decoding="async" class="gi" src="assets/icons/stone-tower.svg" alt="">', hp:280, dmg:[18,28], xp:280, gold:[100,150],lvl:9, loc:['ruins'],     boss:true, drops:{golem_core:1}, resources:{r_ore:[3,5],r_gem:[2,4]} },
+  { id:'lich',    name:'Лич Морхольд',         ico:'<img decoding="async" class="gi" src="assets/icons/death-skull.svg" alt="">', hp:380, dmg:[22,34], xp:420, gold:[150,250],lvl:10,loc:['crypt'],     boss:true, drops:{lich_skull:1}, resources:{r_gem:[3,5],r_silk:[2,3],r_herb:[2,3]} },
+  { id:'snowking',name:'Ледяной Король',       ico:'<img decoding="async" class="gi" src="assets/icons/yeti.svg" alt="">', hp:450, dmg:[24,38], xp:520, gold:[200,300],lvl:12,loc:['mountains'], boss:true, drops:{ice_shard:1}, resources:{r_fur:[4,6],r_gem:[2,3]} },
+  { id:'phoenix', name:'Древний Феникс',       ico:'<img decoding="async" class="gi" src="assets/icons/eagle-emblem.svg" alt="">', hp:500, dmg:[26,40], xp:600, gold:[250,350],lvl:13,loc:['volcano'],   boss:true, drops:{phoenix_feather:1}, resources:{r_spice:[4,6],r_gem:[2,4]} },
+  { id:'dragon',  name:'Древний Дракон',       ico:'<img decoding="async" class="gi" src="assets/icons/dragon-head.svg" alt="">', hp:700, dmg:[30,46], xp:1000,gold:[500,750],lvl:16,loc:['lair'],      boss:true, resources:{r_gem:[5,8],r_spice:[3,5],r_silk:[3,5],r_ore:[3,5]} }
 ];
 
 // ==================== ЛОКАЦИИ ====================
 const LOCATIONS = {
-  village:   { name:'Деревня Тихий Дол',   ico:'<img class="gi" src="assets/icons/village.svg" alt="">', desc:'Уютные дома, дым из труб, торговцы и трактирщик.', actions:['hunt','arena','shop','inn','travel'], shop:'village' },
-  forest:    { name:'Сумрачный Лес',       ico:'<img class="gi" src="assets/icons/pine-tree.svg" alt="">', desc:'Старые сосны шепчут на ветру. Тропа петляет среди корней.', actions:['hunt','rest','shop','travel'] },
-  swamp:     { name:'Гнилые Топи',         ico:'<img class="gi" src="assets/icons/withered-tree.svg" alt="">', desc:'Густой туман, запах тлена и тёмная вода под ногами.', actions:['hunt','rest','shop','travel'] },
-  cave:      { name:'Пещеры Ульдара',      ico:'<img class="gi" src="assets/icons/hole.svg" alt="">', desc:'Влажные стены, эхо капель и чьи-то рычания во тьме.', actions:['hunt','shop','travel'] },
-  crypt:     { name:'Древняя Крипта',      ico:'<img class="gi" src="assets/icons/coffin.svg" alt="">', desc:'Холод пробирает до костей. Здесь покоятся мёртвые — или нет.', actions:['hunt','shop','travel'] },
-  ruins:     { name:'Развалины Альдора',   ico:'<img class="gi" src="assets/icons/greek-temple.svg" alt="">', desc:'Обломки забытого города. Эхо древних шагов.', actions:['hunt','shop','travel'] },
-  port:      { name:'Порт Бурехвост',      ico:'<img class="gi" src="assets/icons/anchor.svg" alt="">', desc:'Соль на ветру, крики чаек и звон монет в трактирах.', actions:['hunt','shop','inn','travel'], shop:'port' },
-  mountains: { name:'Ледяные Пики',        ico:'<img class="gi" src="assets/icons/mountains.svg" alt="">', desc:'Снежные вершины, ветер режет лицо. Тут водятся твари.', actions:['hunt','rest','shop','travel'] },
-  volcano:   { name:'Огненный Хребет',     ico:'<img class="gi" src="assets/icons/volcano.svg" alt="">', desc:'Раскалённые камни, потоки лавы. Воздух дрожит от жара.', actions:['hunt','shop','travel'] },
-  lair:      { name:'Логово Дракона',      ico:'<img class="gi" src="assets/icons/dragon-spiral.svg" alt="">', desc:'Логово древнего ужаса. Здесь твой последний бой.', actions:['hunt','shop','travel'] }
+  village:   { name:'Деревня Тихий Дол',   ico:'<img decoding="async" class="gi" src="assets/icons/village.svg" alt="">', desc:'Уютные дома, дым из труб, торговцы и трактирщик.', actions:['hunt','arena','shop','inn','travel'], shop:'village' },
+  forest:    { name:'Сумрачный Лес',       ico:'<img decoding="async" class="gi" src="assets/icons/pine-tree.svg" alt="">', desc:'Старые сосны шепчут на ветру. Тропа петляет среди корней.', actions:['hunt','rest','shop','travel'] },
+  swamp:     { name:'Гнилые Топи',         ico:'<img decoding="async" class="gi" src="assets/icons/withered-tree.svg" alt="">', desc:'Густой туман, запах тлена и тёмная вода под ногами.', actions:['hunt','rest','shop','travel'] },
+  cave:      { name:'Пещеры Ульдара',      ico:'<img decoding="async" class="gi" src="assets/icons/hole.svg" alt="">', desc:'Влажные стены, эхо капель и чьи-то рычания во тьме.', actions:['hunt','shop','travel'] },
+  crypt:     { name:'Древняя Крипта',      ico:'<img decoding="async" class="gi" src="assets/icons/coffin.svg" alt="">', desc:'Холод пробирает до костей. Здесь покоятся мёртвые — или нет.', actions:['hunt','shop','travel'] },
+  ruins:     { name:'Развалины Альдора',   ico:'<img decoding="async" class="gi" src="assets/icons/greek-temple.svg" alt="">', desc:'Обломки забытого города. Эхо древних шагов.', actions:['hunt','shop','travel'] },
+  port:      { name:'Порт Бурехвост',      ico:'<img decoding="async" class="gi" src="assets/icons/anchor.svg" alt="">', desc:'Соль на ветру, крики чаек и звон монет в трактирах.', actions:['hunt','shop','inn','travel'], shop:'port' },
+  mountains: { name:'Ледяные Пики',        ico:'<img decoding="async" class="gi" src="assets/icons/mountains.svg" alt="">', desc:'Снежные вершины, ветер режет лицо. Тут водятся твари.', actions:['hunt','rest','shop','travel'] },
+  volcano:   { name:'Огненный Хребет',     ico:'<img decoding="async" class="gi" src="assets/icons/volcano.svg" alt="">', desc:'Раскалённые камни, потоки лавы. Воздух дрожит от жара.', actions:['hunt','shop','travel'] },
+  lair:      { name:'Логово Дракона',      ico:'<img decoding="async" class="gi" src="assets/icons/dragon-spiral.svg" alt="">', desc:'Логово древнего ужаса. Здесь твой последний бой.', actions:['hunt','shop','travel'] }
 };
 
 // ==================== МАГАЗИНЫ ====================
 const SHOPS = {
   village: {
-    name:'<img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Лавка торговца Гуго',
+    name:'<img decoding="async" class="gi" src="assets/icons/shopping-cart.svg" alt=""> Лавка торговца Гуго',
     items:['potion_s','potion_m','mana_s','bomb','w_axe','ww_gladius','ww_broadsword','ww_cleaver','ww_halberd','ww_stone_axe','wm_crystal_wand','wm_fairy_wand','wm_scroll_staff','wm_gem_wand','wm_frost_orb','wr_curvy_knife','wr_stiletto','wr_sai','wr_butterfly','wr_feather','a_leather','a_chain','h_hood','h_helmet','s_pads','b_leather','b_warrior','p_cloth','p_leather','p_chain','o_buckler','o_shield','ring_str','ring_agi','ring_int','art_orb','art_skull']
   },
   port: {
-    name:'<img class="gi" src="assets/icons/anchor.svg" alt=""> Морская торговая лавка',
+    name:'<img decoding="async" class="gi" src="assets/icons/anchor.svg" alt=""> Морская торговая лавка',
     items:['potion_m','potion_l','mana_m','elixir','bomb','w_warhammer','w_greatsword','w_runic','w_dragonfang','ww_war_pick','ww_spiked_mace','ww_katana','ww_winged_sword','ww_bloody','wm_swirl_wand','wm_thunder','wm_trident','wm_tome','wm_sun_orb','wr_thrown','wr_poison','wr_arrow','wr_bow','wr_shadow','a_chain','a_plate','a_dragon','h_helmet','h_crown','s_pauldrons','s_dragon','b_warrior','b_might','p_chain','p_plate','p_dragon','p_assassin','o_shield','o_tower','ring_str','ring_agi','ring_int','amulet_hp','amulet_mp','amulet_crit','amulet_phoenix','art_orb','art_skull','art_compass','art_ankh','art_eye']
   }
 };
@@ -1478,11 +1051,11 @@ async function cloudSync() {
     if (!r.ok) { throw new Error(j.error || 'save failed'); }
     if (P && typeof j.gold === 'number' && j.gold !== P.gold) {
       if (j.pvp_loss) {
-        log(`<span class="bad"><img class="gi" src="assets/icons/death-skull.svg" alt=""> Тебя убили на арене — ты потерял ${j.pvp_loss} <img class="gi" src="assets/icons/two-coins.svg" alt="">.</span>`);
+        log(`<span class="bad"><img decoding="async" class="gi" src="assets/icons/death-skull.svg" alt=""> Тебя убили на арене — ты потерял ${j.pvp_loss} <img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt="">.</span>`);
       } else if (j.pvp_gain) {
-        log(`<span class="good"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Добыча с арены: +${j.pvp_gain} <img class="gi" src="assets/icons/two-coins.svg" alt="">.</span>`);
+        log(`<span class="good"><img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt=""> Добыча с арены: +${j.pvp_gain} <img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt="">.</span>`);
       } else if (j.gold_clamped) {
-        log(`<span class="sys">Сервер ограничил прирост золота (античит): ${j.gold} <img class="gi" src="assets/icons/two-coins.svg" alt="">.</span>`);
+        log(`<span class="sys">Сервер ограничил прирост золота (античит): ${j.gold} <img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt="">.</span>`);
       }
       P.gold = j.gold|0;
       render();
@@ -1625,11 +1198,11 @@ function renderCloudPanel() {
     el.innerHTML = `
       <div class="auth-hint">Войди в аккаунт или создай новый — прогресс сохраняется в облако, ник берётся из логина.</div>
       <div class="auth-field">
-        <img class="gi" src="assets/icons/sparkles.svg" alt="">
+        <img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt="">
         <input id="auth-user" placeholder="логин (2-24 символа)" maxlength="24" autocomplete="username" onkeydown="if(event.key==='Enter')doAuthLogin()">
       </div>
       <div class="auth-field">
-        <img class="gi" src="assets/icons/sparkles.svg" alt="">
+        <img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt="">
         <input id="auth-pass" type="password" placeholder="пароль (мин. 6 символов)" maxlength="128" autocomplete="current-password" onkeydown="if(event.key==='Enter')doAuthLogin()">
       </div>
       <div class="auth-actions">
@@ -1710,7 +1283,7 @@ function startGame(name, cls) {
   fetchMarket().catch(()=>{});
   $('start-modal').classList.remove('show');
   hr();
-  log(`<span class="epic"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> ${name} (${c.name}) вступает в Сумрачные Земли! <img class="gi" src="assets/icons/crossed-swords.svg" alt=""></span>`);
+  log(`<span class="epic"><img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt=""> ${name} (${c.name}) вступает в Сумрачные Земли! <img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt=""></span>`);
   log(`<span class="sys">Загляни во вкладку «Квесты» (справа) — там ждут задания.</span>`);
   render();
 }
@@ -1725,13 +1298,13 @@ function render() {
 
   const wd = eff('wdmg');
   $('stats-body').innerHTML = `
-    <div class="stat-row"><span><img class="gi" src="assets/icons/muscle-up.svg" alt=""> Сила</span><span>${eff('str')}${P.str!==eff('str')?`<span class="bonus">(+${eff('str')-P.str})</span>`:''}</span></div>
-    <div class="stat-row"><span><img class="gi" src="assets/icons/run.svg" alt=""> Ловкость</span><span>${eff('agi')}${P.agi!==eff('agi')?`<span class="bonus">(+${eff('agi')-P.agi})</span>`:''}</span></div>
-    <div class="stat-row"><span><img class="gi" src="assets/icons/brain.svg" alt=""> Интеллект</span><span>${eff('int')}${P.int!==eff('int')?`<span class="bonus">(+${eff('int')-P.int})</span>`:''}</span></div>
-    <div class="stat-row"><span><img class="gi" src="assets/icons/round-shield.svg" alt=""> Защита</span><span>${eff('armor')}</span></div>
-    <div class="stat-row"><span><img class="gi" src="assets/icons/polar-star.svg" alt=""> Шанс крита</span><span>${eff('crit')}%</span></div>
-    <div class="stat-row"><span><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Урон</span><span>${wd[0]}—${wd[1]}</span></div>
-    <div class="stat-row"><span><img class="gi" src="assets/icons/two-coins.svg" alt=""> Золото</span><span>${P.gold}</span></div>
+    <div class="stat-row"><span><img decoding="async" class="gi" src="assets/icons/muscle-up.svg" alt=""> Сила</span><span>${eff('str')}${P.str!==eff('str')?`<span class="bonus">(+${eff('str')-P.str})</span>`:''}</span></div>
+    <div class="stat-row"><span><img decoding="async" class="gi" src="assets/icons/run.svg" alt=""> Ловкость</span><span>${eff('agi')}${P.agi!==eff('agi')?`<span class="bonus">(+${eff('agi')-P.agi})</span>`:''}</span></div>
+    <div class="stat-row"><span><img decoding="async" class="gi" src="assets/icons/brain.svg" alt=""> Интеллект</span><span>${eff('int')}${P.int!==eff('int')?`<span class="bonus">(+${eff('int')-P.int})</span>`:''}</span></div>
+    <div class="stat-row"><span><img decoding="async" class="gi" src="assets/icons/round-shield.svg" alt=""> Защита</span><span>${eff('armor')}</span></div>
+    <div class="stat-row"><span><img decoding="async" class="gi" src="assets/icons/polar-star.svg" alt=""> Шанс крита</span><span>${eff('crit')}%</span></div>
+    <div class="stat-row"><span><img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt=""> Урон</span><span>${wd[0]}—${wd[1]}</span></div>
+    <div class="stat-row"><span><img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt=""> Золото</span><span>${P.gold}</span></div>
   `;
 
   renderEquipGrid();
@@ -1777,7 +1350,7 @@ function renderEquipGrid() {
     {slot:'art2',      col:3, row:4},
     {slot:'art3',      col:3, row:5}
   ];
-  const heroIco = (P && P.ico) || '<img class="gi" src="assets/icons/wizard-face.svg" alt="">';
+  const heroIco = (P && P.ico) || '<img decoding="async" class="gi" src="assets/icons/wizard-face.svg" alt="">';
   const PLACEHOLDER = {
     head:'visored-helm', amulet:'prayer-beads', shoulders:'shoulder-armor',
     body:'breastplate', belt:'knot', legs:'kimono', weapon:'crossed-swords',
@@ -1792,7 +1365,7 @@ function renderEquipGrid() {
     const empty = !inst;
     const ench = inst && inst.enchant>0 ? `<span class="ench">+${inst.enchant}</span>` : '';
     const title = it ? `${it.name}${inst.enchant>0?' +'+inst.enchant:''} — ${describeInst(inst)}` : SLOT_NAMES[slot]+' (пусто)';
-    const icoHtml = it ? it.ico : `<img class="gi slot-ph" src="assets/icons/${PLACEHOLDER[slot]}.svg" alt="">`;
+    const icoHtml = it ? it.ico : `<img decoding="async" class="gi slot-ph" src="assets/icons/${PLACEHOLDER[slot]}.svg" alt="">`;
     html += `<div class="esl ${empty?'empty':''}" style="grid-column:${col};grid-row:${row}" onclick="openSlotModal('${slot}')" title="${title.replace(/"/g,'&quot;')}">${icoHtml}${ench}</div>`;
   }
   html += '</div>';
@@ -1813,7 +1386,7 @@ function openSlotModal(slot) {
       <div style="color:#5fb3d4;font-size:12px;margin-bottom:14px">${describeInst(inst)}</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="act" onclick="unequipSlot('${slot}')">Снять</button>
-        <button class="act" onclick="enchantSlot('${slot}')" ${can?'':'disabled'}>Зачаровать (${cost} <img class="gi" src="assets/icons/two-coins.svg" alt="">)</button>
+        <button class="act" onclick="enchantSlot('${slot}')" ${can?'':'disabled'}>Зачаровать (${cost} <img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt="">)</button>
         <button class="act" style="margin-left:auto" onclick="closeSlotModal()">Закрыть</button>
       </div>`;
   } else {
@@ -1911,7 +1484,7 @@ function enchantSlot(slot) {
   if (P.gold < cost) return;
   P.gold -= cost;
   inst.enchant = (inst.enchant||0) + 1;
-  log(`<span class="good"><img class="gi" src="assets/icons/sparkles.svg" alt=""> ${ITEMS[inst.id].name} зачарован до +${inst.enchant}!</span>`);
+  log(`<span class="good"><img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt=""> ${ITEMS[inst.id].name} зачарован до +${inst.enchant}!</span>`);
   openSlotModal(slot);
   render();
 }
@@ -2010,7 +1583,7 @@ function acceptQuest(qid) {
     for (const u of q.accept.unlock) if (!unlocked.includes(u)) unlocked.push(u);
     log(`<span class="info">Открыто на карте: ${q.accept.unlock.map(u=>LOCATIONS[u].name).join(', ')}.</span>`);
   }
-  log(`<span class="quest"><img class="gi" src="assets/icons/star-formation.svg" alt=""> Принято задание: <b>${q.title}</b>.</span> <span class="sys">${q.desc}</span>`);
+  log(`<span class="quest"><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""> Принято задание: <b>${q.title}</b>.</span> <span class="sys">${q.desc}</span>`);
   // visit auto-check
   if (q.type==='visit' && P.location===q.target) {
     P.quests.active[qid].visited = true;
@@ -2033,8 +1606,8 @@ function claimQuest(qid) {
   delete P.quests.active[qid];
   P.quests.completed.push(qid);
   hr();
-  log(`<span class="epic"><img class="gi" src="assets/icons/star-formation.svg" alt=""> Задание «${q.title}» выполнено!</span>`);
-  if (q.reward.gold) log(`<span class="gold">+${q.reward.gold} <img class="gi" src="assets/icons/two-coins.svg" alt=""></span>`);
+  log(`<span class="epic"><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""> Задание «${q.title}» выполнено!</span>`);
+  if (q.reward.gold) log(`<span class="gold">+${q.reward.gold} <img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt=""></span>`);
   if (q.reward.items) log(`<span class="good">Получено: ${Object.entries(q.reward.items).map(([k,n])=>ITEMS[k].name+' ×'+n).join(', ')}.</span>`);
   if (q.reward.unlock) log(`<span class="info">Открыто на карте: ${q.reward.unlock.map(u=>LOCATIONS[u].name).join(', ')}.</span>`);
   if (q.next && !P.quests.completed.includes(q.next) && !P.quests.active[q.next] && !P.quests.available.includes(q.next)) {
@@ -2058,7 +1631,7 @@ function onKill(enemy) {
     const q = QUESTS[qid];
     if (q.type==='kill' && q.filter && q.filter(enemy)) {
       P.quests.active[qid].kills = (P.quests.active[qid].kills||0)+1;
-      if (questDone(qid)) log(`<span class="quest"><img class="gi" src="assets/icons/check-mark.svg" alt=""> Задание «${q.title}» готово к сдаче — вернись в ${LOCATIONS[q.giver].name}.</span>`);
+      if (questDone(qid)) log(`<span class="quest"><img decoding="async" class="gi" src="assets/icons/check-mark.svg" alt=""> Задание «${q.title}» готово к сдаче — вернись в ${LOCATIONS[q.giver].name}.</span>`);
     }
   }
 }
@@ -2067,7 +1640,7 @@ function onTravel() {
     const q = QUESTS[qid];
     if (q.type==='visit' && q.target===P.location) {
       P.quests.active[qid].visited = true;
-      log(`<span class="quest"><img class="gi" src="assets/icons/check-mark.svg" alt=""> Задание «${q.title}» готово к сдаче — поговори с заказчиком.</span>`);
+      log(`<span class="quest"><img decoding="async" class="gi" src="assets/icons/check-mark.svg" alt=""> Задание «${q.title}» готово к сдаче — поговори с заказчиком.</span>`);
     }
   }
 }
@@ -2075,7 +1648,7 @@ function onCollect(itemId) {
   for (const qid of Object.keys(P.quests.active)) {
     const q = QUESTS[qid];
     if (q.type==='collect' && q.item===itemId && questDone(qid)) {
-      log(`<span class="quest"><img class="gi" src="assets/icons/check-mark.svg" alt=""> Задание «${q.title}» готово к сдаче — вернись в ${LOCATIONS[q.giver].name}.</span>`);
+      log(`<span class="quest"><img decoding="async" class="gi" src="assets/icons/check-mark.svg" alt=""> Задание «${q.title}» готово к сдаче — вернись в ${LOCATIONS[q.giver].name}.</span>`);
     }
   }
 }
@@ -2089,9 +1662,9 @@ function renderQuests() {
     html += avail.map(qid => {
       const q = QUESTS[qid];
       return `<div class="quest-card">
-        <div class="title">${q.side?'<img class="gi" src="assets/icons/sparkles.svg" alt=""> ':''}${q.title}</div>
+        <div class="title">${q.side?'<img decoding="async" class="gi" src="assets/icons/sparkles.svg" alt=""> ':''}${q.title}</div>
         <div class="desc">${q.desc}</div>
-        <div class="reward">Награда: ${q.reward.gold||0}<img class="gi" src="assets/icons/two-coins.svg" alt="">${q.reward.items?', '+Object.entries(q.reward.items).map(([k,n])=>ITEMS[k].name+' ×'+n).join(', '):''}</div>
+        <div class="reward">Награда: ${q.reward.gold||0}<img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt="">${q.reward.items?', '+Object.entries(q.reward.items).map(([k,n])=>ITEMS[k].name+' ×'+n).join(', '):''}</div>
         <button class="tiny" style="margin-top:4px" onclick="acceptQuest('${qid}')">Принять</button>
       </div>`;
     }).join('');
@@ -2112,8 +1685,8 @@ function renderQuests() {
       return `<div class="quest-card ${done?'done':''}">
         <div class="title">${q.title}</div>
         <div class="desc">${q.desc}</div>
-        <div class="progress">Прогресс: ${prog}/${need} ${done?'<b style="color:#6abe30"><img class="gi" src="assets/icons/check-mark.svg" alt=""> готово</b>':''}</div>
-        <div class="reward">Награда: ${q.reward.gold||0}<img class="gi" src="assets/icons/two-coins.svg" alt=""></div>
+        <div class="progress">Прогресс: ${prog}/${need} ${done?'<b style="color:#6abe30"><img decoding="async" class="gi" src="assets/icons/check-mark.svg" alt=""> готово</b>':''}</div>
+        <div class="reward">Награда: ${q.reward.gold||0}<img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt=""></div>
         ${done?`<button class="tiny" style="margin-top:4px" onclick="${P.location===q.giver?`claimQuest('${qid}')`:`travel('${q.giver}')`}">${P.location===q.giver?'Сдать':'Вернуться к '+LOCATIONS[q.giver].name}</button>`:''}
       </div>`;
     }).join('');
@@ -2123,7 +1696,7 @@ function renderQuests() {
 
   // completed
   if (P.quests.completed.length) {
-    $('done-body').innerHTML = P.quests.completed.map(qid => `<div style="color:#6abe30"><img class="gi" src="assets/icons/check-mark.svg" alt=""> ${QUESTS[qid].title}</div>`).join('');
+    $('done-body').innerHTML = P.quests.completed.map(qid => `<div style="color:#6abe30"><img decoding="async" class="gi" src="assets/icons/check-mark.svg" alt=""> ${QUESTS[qid].title}</div>`).join('');
   } else {
     $('done-body').innerHTML = `<div style="color:#6b4423;font-style:italic;font-size:11px">пусто</div>`;
   }
@@ -2138,20 +1711,20 @@ function renderQuests() {
 function renderActions() {
   const el = $('actions');
   if (inCombat) {
-    const leaveBtn = pvpMode ? `<button class="act" onclick="leaveArena()"><img class="gi" src="assets/icons/run.svg" alt=""> Покинуть бой</button>` : '';
+    const leaveBtn = pvpMode ? `<button class="act" onclick="leaveArena()"><img decoding="async" class="gi" src="assets/icons/run.svg" alt=""> Покинуть бой</button>` : '';
     el.innerHTML = `
-      <button class="act" onclick="attack()"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Атаковать</button>
-      ${pvpMode ? '' : `<button class="act" onclick="flee()"><img class="gi" src="assets/icons/run.svg" alt=""> Бежать</button>`}
+      <button class="act" onclick="attack()"><img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt=""> Атаковать</button>
+      ${pvpMode ? '' : `<button class="act" onclick="flee()"><img decoding="async" class="gi" src="assets/icons/run.svg" alt=""> Бежать</button>`}
       ${leaveBtn}
     `; return;
   }
   const loc = LOCATIONS[P.location];
   const btns = [];
-  if (loc.actions.includes('hunt')) btns.push(`<button class="act" onclick="hunt()"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Искать врагов</button>`);
-  if (loc.actions.includes('rest')) btns.push(`<button class="act" onclick="rest()"><img class="gi" src="assets/icons/sleepy.svg" alt=""> Отдохнуть</button>`);
-  if (loc.actions.includes('shop')) btns.push(`<button class="act" onclick="openShop()"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Лавка</button>`);
-  if (loc.actions.includes('inn'))  btns.push(`<button class="act" onclick="inn()"><img class="gi" src="assets/icons/beer-stein.svg" alt=""> Трактир</button>`);
-  if (loc.actions.includes('arena') && !onArena) btns.push(`<button class="act" onclick="arena()"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Круговая арена</button>`);
+  if (loc.actions.includes('hunt')) btns.push(`<button class="act" onclick="hunt()"><img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt=""> Искать врагов</button>`);
+  if (loc.actions.includes('rest')) btns.push(`<button class="act" onclick="rest()"><img decoding="async" class="gi" src="assets/icons/sleepy.svg" alt=""> Отдохнуть</button>`);
+  if (loc.actions.includes('shop')) btns.push(`<button class="act" onclick="openShop()"><img decoding="async" class="gi" src="assets/icons/shopping-cart.svg" alt=""> Лавка</button>`);
+  if (loc.actions.includes('inn'))  btns.push(`<button class="act" onclick="inn()"><img decoding="async" class="gi" src="assets/icons/beer-stein.svg" alt=""> Трактир</button>`);
+  if (loc.actions.includes('arena') && !onArena) btns.push(`<button class="act" onclick="arena()"><img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt=""> Круговая арена</button>`);
   el.innerHTML = btns.join('');
 }
 
@@ -2301,7 +1874,7 @@ function inn() {
   if (P.gold < 10) { log(`<span class="bad">Нужно 10 золотых для ночлега.</span>`); return; }
   P.gold -= 10;
   P.hp = eff('hpMax'); P.mp = eff('mpMax');
-  log(`<span class="good">Ты ночуешь в трактире. Полностью восстановлено. (-10 <img class="gi" src="assets/icons/two-coins.svg" alt="">)</span>`);
+  log(`<span class="good">Ты ночуешь в трактире. Полностью восстановлено. (-10 <img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt="">)</span>`);
   render();
 }
 
@@ -2339,19 +1912,19 @@ function renderShop() {
   const loc = LOCATIONS[P.location];
   $('shop-name').innerHTML = shop
     ? shop.name
-    : `<img class="gi" src="assets/icons/two-coins.svg" alt=""> ${tr ? tr.name : 'Торговец'}`;
+    : `<img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt=""> ${tr ? tr.name : 'Торговец'}`;
   $('shop-gold').textContent = P.gold;
   const tabs = [];
   if (shop) {
     tabs.push(
-      { k:'weapon',     n:'<img class="gi" src="assets/icons/crossed-swords.svg" alt=""> Оружие' },
-      { k:'armor',      n:'<img class="gi" src="assets/icons/round-shield.svg" alt=""> Броня' },
-      { k:'accessory',  n:'<img class="gi" src="assets/icons/diamond-ring.svg" alt=""> Украшения' },
-      { k:'consumable', n:'<img class="gi" src="assets/icons/round-bottom-flask.svg" alt=""> Зелья' },
+      { k:'weapon',     n:'<img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt=""> Оружие' },
+      { k:'armor',      n:'<img decoding="async" class="gi" src="assets/icons/round-shield.svg" alt=""> Броня' },
+      { k:'accessory',  n:'<img decoding="async" class="gi" src="assets/icons/diamond-ring.svg" alt=""> Украшения' },
+      { k:'consumable', n:'<img decoding="async" class="gi" src="assets/icons/round-bottom-flask.svg" alt=""> Зелья' },
     );
   }
-  if (tr) tabs.push({ k:'resources', n:'<img class="gi" src="assets/icons/two-coins.svg" alt=""> Ресурсы' });
-  if (shop) tabs.push({ k:'sell', n:'<img class="gi" src="assets/icons/two-coins.svg" alt=""> Продать' });
+  if (tr) tabs.push({ k:'resources', n:'<img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt=""> Ресурсы' });
+  if (shop) tabs.push({ k:'sell', n:'<img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt=""> Продать' });
   if (!tabs.find(t => t.k === shopState.tab)) shopState.tab = tabs[0]?.k || 'resources';
   $('shop-tabs').innerHTML = tabs.map(t =>
     `<div class="shop-tab ${shopState.tab===t.k?'active':''}" onclick="shopState.tab='${t.k}';renderShop()">${t.n}</div>`
@@ -2372,7 +1945,7 @@ function renderShop() {
       <div class="ico">${it.ico}</div>
       <div class="nm">${it.name}</div>
       <div class="ds">${it.desc||''}<br><span style="color:#5fb3d4">${extra}</span></div>
-      <div class="price ${canBuy?'':'no'}">${it.price} <img class="gi" src="assets/icons/two-coins.svg" alt=""></div>
+      <div class="price ${canBuy?'':'no'}">${it.price} <img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt=""></div>
       <button onclick="buy('${id}')" ${canBuy?'':'disabled'}>Купить</button>
     </div>`;
   }).join('');
@@ -2395,7 +1968,7 @@ function renderSellGrid() {
       <div class="ico">${it.ico}</div>
       <div class="nm">${it.name}${inst.enchant>0?` <span style="color:#f4d03f">+${inst.enchant}</span>`:''}</div>
       <div class="ds"><span style="color:#8b6f47">в сумке</span><br><span style="color:#5fb3d4">${describeInst(inst)}</span></div>
-      <div class="price">${price} <img class="gi" src="assets/icons/two-coins.svg" alt=""></div>
+      <div class="price">${price} <img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt=""></div>
       <button onclick="sellEquip(${i})">Продать</button>
     </div>`);
   }
@@ -2418,7 +1991,7 @@ function renderSellGrid() {
       <div class="ico">${it.ico}</div>
       <div class="nm">${it.name}</div>
       <div class="ds">${it.type==='quest'?'<span style="color:#8b6f47">материал</span>':(it.desc||'')}<br><span style="color:#5fb3d4">в сумке: ${qty}</span></div>
-      <div class="price">${price} <img class="gi" src="assets/icons/two-coins.svg" alt=""> / шт.</div>
+      <div class="price">${price} <img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt=""> / шт.</div>
       <div style="display:flex;gap:4px;align-items:center;justify-content:center;flex-wrap:wrap">
         ${qtyCtrl}
         <button onclick="sellStack('${k}', ${qty>1?`(parseInt(document.getElementById('sellq-${k}').value)||1)`:1})">Продать</button>
@@ -2434,7 +2007,7 @@ function sellEquip(idx) {
   const price = sellPriceInst(inst);
   P.equipInv.splice(idx, 1);
   P.gold += price;
-  log(`<span class="info"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Продано: ${it.ico} ${it.name}${inst.enchant>0?' +'+inst.enchant:''} за ${price}.</span>`);
+  log(`<span class="info"><img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt=""> Продано: ${it.ico} ${it.name}${inst.enchant>0?' +'+inst.enchant:''} за ${price}.</span>`);
   renderShop(); render();
 }
 function sellStack(id, qty=1) {
@@ -2446,7 +2019,7 @@ function sellStack(id, qty=1) {
   P.inv[id] -= n;
   if (P.inv[id] <= 0) delete P.inv[id];
   P.gold += total;
-  log(`<span class="info"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Продано: ${it.ico} ${it.name} ×${n} за ${total}.</span>`);
+  log(`<span class="info"><img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt=""> Продано: ${it.ico} ${it.name} ×${n} за ${total}.</span>`);
   renderShop(); render();
 }
 function buy(id) {
@@ -2455,16 +2028,16 @@ function buy(id) {
   P.gold -= it.price;
   if (it.type==='consumable') {
     P.inv[id] = (P.inv[id]||0)+1;
-    log(`<span class="good"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено: ${it.ico} ${it.name}</span> <span class="gold">(-${it.price} <img class="gi" src="assets/icons/two-coins.svg" alt="">)</span>`);
+    log(`<span class="good"><img decoding="async" class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено: ${it.ico} ${it.name}</span> <span class="gold">(-${it.price} <img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt="">)</span>`);
   } else {
     const inst = { id, enchant: 0 };
     const slot = it.slot==='artifact' ? (['art1','art2','art3'].find(s=>!P.equipped[s])||null) : it.slot;
     if (slot && SLOTS.includes(slot) && !P.equipped[slot]) {
       P.equipped[slot] = inst;
-      log(`<span class="good"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Приобретено и надето: ${it.ico} ${it.name}</span> <span class="gold">(-${it.price} <img class="gi" src="assets/icons/two-coins.svg" alt="">)</span>`);
+      log(`<span class="good"><img decoding="async" class="gi" src="assets/icons/shopping-cart.svg" alt=""> Приобретено и надето: ${it.ico} ${it.name}</span> <span class="gold">(-${it.price} <img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt="">)</span>`);
     } else {
       P.equipInv.push(inst);
-      log(`<span class="good"><img class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено: ${it.ico} ${it.name}</span> <span class="gold">(-${it.price} <img class="gi" src="assets/icons/two-coins.svg" alt="">)</span> <span class="sys">(в сумку)</span>`);
+      log(`<span class="good"><img decoding="async" class="gi" src="assets/icons/shopping-cart.svg" alt=""> Куплено: ${it.ico} ${it.name}</span> <span class="gold">(-${it.price} <img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt="">)</span> <span class="sys">(в сумку)</span>`);
     }
   }
   renderShop();
@@ -2477,7 +2050,7 @@ function useItem(id) {
   if (inCombat && it.combat) {
     P.inv[id]--;
     if (it.aoe) {
-      log(`<span class="good"><img class="gi" src="assets/icons/explosion-rays.svg" alt=""> ${it.name} взрывается среди врагов! (${it.dmg} урона каждому)</span>`);
+      log(`<span class="good"><img decoding="async" class="gi" src="assets/icons/explosion-rays.svg" alt=""> ${it.name} взрывается среди врагов! (${it.dmg} урона каждому)</span>`);
       const hits = Es.map(e => e && e.hp>0 ? it.dmg : 0);
       applyMassDamage(hits);
     } else if (it.useC) {
@@ -2582,7 +2155,7 @@ function arenaEntryFromPlayer(p) {
     _pvpTargetId: p.id,
     _pvpUsername: p.username,
     name: p.username + (p.cls?` (${p.cls})`:''),
-    ico: '<img class="gi" src="assets/icons/crossed-swords.svg" alt="">',
+    ico: '<img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt="">',
     hp: p.hp|0, hpMax: p.hpMax|0,
     dmg: [0, 0], xp: 0, gold: [0, 0],
     lvl: p.lvl|0, loc: ['village'],
@@ -2684,7 +2257,7 @@ function logIncomingArenaHit(ev) {
     return;
   }
   // attack
-  if (ev.crit) log(`<span class="epic"><img class="gi" src="assets/icons/star-formation.svg" alt=""> ${_pickArenaTpl(ARENA_CRIT_TPL)(name, ev.dmg|0)}</span>`);
+  if (ev.crit) log(`<span class="epic"><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""> ${_pickArenaTpl(ARENA_CRIT_TPL)(name, ev.dmg|0)}</span>`);
   else         log(`<span class="bad">${_pickArenaTpl(ARENA_HIT_TPL)(name, ev.dmg|0)}</span>`);
 }
 
@@ -2732,7 +2305,7 @@ async function onOwnArenaDeath(killerId) {
   stopArenaPoll();
   const killer = (arenaState.players||[]).find(p => p.id === killerId);
   const name = killer ? killer.username : 'соперник';
-  log(`<span class="bad"><img class="gi" src="assets/icons/death-skull.svg" alt=""> Ты повержен на арене рукой ${escapeHtml(name)}. Опыт и этап не тронуты.</span>`);
+  log(`<span class="bad"><img decoding="async" class="gi" src="assets/icons/death-skull.svg" alt=""> Ты повержен на арене рукой ${escapeHtml(name)}. Опыт и этап не тронуты.</span>`);
   P.hp = Math.floor(eff('hpMax')/2);
   P.mp = Math.floor(eff('mpMax')/2);
   await leaveArenaLocal();
@@ -2794,7 +2367,7 @@ setInterval(async () => {
         const last = villageFeedSeen.get(ev.text) || 0;
         if (now - last < VILLAGE_FEED_DEDUP_MS) continue;
         villageFeedSeen.set(ev.text, now);
-        log(`<span class="info"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> ${escapeHtml(ev.text)}</span>`);
+        log(`<span class="info"><img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt=""> ${escapeHtml(ev.text)}</span>`);
       }
     }
   } catch {}
@@ -2836,7 +2409,7 @@ async function arena() {
   inCombat = true;
   Es = []; target = 0;
   hr();
-  log(`<span class="sys"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> — Круговая арена: живой PvP. Бой идёт до смерти или выхода. —</span>`);
+  log(`<span class="sys"><img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt=""> — Круговая арена: живой PvP. Бой идёт до смерти или выхода. —</span>`);
   startCombatLoop();
   startArenaPoll();
   pollArenaStateOnce();
@@ -2879,13 +2452,13 @@ async function arenaAttack() {
     log(`<span class="info">${escapeHtml(e._pvpUsername)} уворачивается от твоего удара!</span>`);
   } else {
     log(a.crit
-      ? `<span class="epic"><img class="gi" src="assets/icons/star-formation.svg" alt=""> КРИТ! Ты бьёшь ${escapeHtml(e._pvpUsername)} за ${a.dmg} урона!</span>`
+      ? `<span class="epic"><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""> КРИТ! Ты бьёшь ${escapeHtml(e._pvpUsername)} за ${a.dmg} урона!</span>`
       : `<span class="good">Ты бьёшь ${escapeHtml(e._pvpUsername)} за ${a.dmg} урона.</span>`);
     e.hp = a.target_hp|0;
   }
   if (a.kill) {
     e._dead = true; e.hp = 0;
-    log(`<span class="good"><img class="gi" src="assets/icons/star-formation.svg" alt=""> ${escapeHtml(e._pvpUsername)} повержен! Трофей: +${a.kill.transfer} <img class="gi" src="assets/icons/two-coins.svg" alt="">. Убийств: ${a.kill.pvp_kills}.</span>`);
+    log(`<span class="good"><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""> ${escapeHtml(e._pvpUsername)} повержен! Трофей: +${a.kill.transfer} <img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt="">. Убийств: ${a.kill.pvp_kills}.</span>`);
     P.gold = Math.max(0, P.gold + (a.kill.transfer|0));
     P.pvp_kills = a.kill.pvp_kills|0;
     cloudSync().catch(()=>{});
@@ -2942,7 +2515,7 @@ async function arenaCast(key) {
       totalTransfer += k.transfer|0;
       const entry = Es.find(e => e._pvp && e._pvpTargetId === k.target_id);
       const nm = entry ? entry._pvpUsername : 'соперник';
-      log(`<span class="good"><img class="gi" src="assets/icons/star-formation.svg" alt=""> ${escapeHtml(nm)} повержен! Трофей: +${k.transfer} <img class="gi" src="assets/icons/two-coins.svg" alt="">.</span>`);
+      log(`<span class="good"><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""> ${escapeHtml(nm)} повержен! Трофей: +${k.transfer} <img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt="">.</span>`);
     }
     P.gold = Math.max(0, P.gold + totalTransfer);
     if (typeof c.pvp_kills === 'number') P.pvp_kills = c.pvp_kills;
@@ -2967,14 +2540,14 @@ function hunt() {
   inCombat = true;
   startCombatLoop();
   hr();
-  log(`<span class="sys">— Этап ${s}${bossStage?' <img class="gi" src="assets/icons/star-formation.svg" alt=""> БОСС-АРЕНА':''} —</span>`);
+  log(`<span class="sys">— Этап ${s}${bossStage?' <img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""> БОСС-АРЕНА':''} —</span>`);
   if (bossStage) {
     const boss = Es[Es.length-1];
-    log(`<span class="epic"><img class="gi" src="assets/icons/star-formation.svg" alt=""> ${boss.name} и его свита преграждают тебе путь!</span>`);
+    log(`<span class="epic"><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""> ${boss.name} и его свита преграждают тебе путь!</span>`);
   } else if (Es.length===1) {
-    log(`<span class="bad"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> ${Es[0].name} нападает!</span>`);
+    log(`<span class="bad"><img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt=""> ${Es[0].name} нападает!</span>`);
   } else {
-    log(`<span class="bad"><img class="gi" src="assets/icons/crossed-swords.svg" alt=""> На тебя нападают: ${Es.map(e=>e.name).join(', ')}!</span>`);
+    log(`<span class="bad"><img decoding="async" class="gi" src="assets/icons/crossed-swords.svg" alt=""> На тебя нападают: ${Es.map(e=>e.name).join(', ')}!</span>`);
   }
   render();
 }
@@ -2989,7 +2562,7 @@ function attack() {
   const crit = Math.random() < (eff('crit')/100);
   const final = crit ? Math.floor(dmg*1.7) : dmg;
   log(crit
-    ? `<span class="epic"><img class="gi" src="assets/icons/star-formation.svg" alt=""> КРИТ! Ты бьёшь ${e.name} за ${final} урона!</span>`
+    ? `<span class="epic"><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""> КРИТ! Ты бьёшь ${e.name} за ${final} урона!</span>`
     : `<span class="good">Ты бьёшь ${e.name} за ${final} урона.</span>`);
   if (crit) {
     const hits = new Array(Es.length).fill(0);
@@ -3067,7 +2640,7 @@ function finishPlayerTurn(skipDeathCheck=false) {
   for (let i=0;i<Es.length;i++) {
     if (Es[i].hp<=0 && !Es[i]._dead) {
       Es[i]._dead = true;
-      log(`<span class="good"><img class="gi" src="assets/icons/star-formation.svg" alt=""> ${Es[i].name} повержен!</span>`);
+      log(`<span class="good"><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""> ${Es[i].name} повержен!</span>`);
     }
   }
   if (!aliveIdx().length) { winFight(); return; }
@@ -3156,7 +2729,7 @@ function awardKillsLoot(enemies) {
         if (n > 0) {
           P.inv[rid] = (P.inv[rid]||0) + n;
           credit[rid] = (credit[rid]||0) + n;
-          log(`<span class="info"><img class="gi" src="assets/icons/two-coins.svg" alt=""> Добыто: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${n}.</span>`);
+          log(`<span class="info"><img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt=""> Добыто: ${ITEMS[rid].ico} ${ITEMS[rid].name} ×${n}.</span>`);
           onCollect(rid);
         }
       }
@@ -3170,7 +2743,7 @@ function awardKillsLoot(enemies) {
     onKill(e);
   }
   P.xp += totalXp; P.gold += totalGold;
-  log(`<span class="good"><img class="gi" src="assets/icons/star-formation.svg" alt=""> Этап зачищен!</span> +${totalXp} XP, +${totalGold} <img class="gi" src="assets/icons/two-coins.svg" alt="">`);
+  log(`<span class="good"><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""> Этап зачищен!</span> +${totalXp} XP, +${totalGold} <img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt="">`);
   while (P.xp >= P.xpNext) levelUp();
 }
 
@@ -3188,7 +2761,7 @@ function applyMassDamage(hits) {
 }
 
 function cascadeOverflow(pool) {
-  log(`<span class="epic"><img class="gi" src="assets/icons/explosion-rays.svg" alt=""> Избыток урона (${pool}) прорывается на следующий этап!</span>`);
+  log(`<span class="epic"><img decoding="async" class="gi" src="assets/icons/explosion-rays.svg" alt=""> Избыток урона (${pool}) прорывается на следующий этап!</span>`);
   let safety = 20;
   while (pool > 0 && safety-- > 0) {
     if (!Es.length) break;
@@ -3201,7 +2774,7 @@ function cascadeOverflow(pool) {
     Es = gen.group;
     for (const e of Es) scheduleEnemy(e, true);
     target = 0;
-    log(`<span class="sys">— Этап ${s}${gen.bossStage?' <img class="gi" src="assets/icons/star-formation.svg" alt=""> БОСС-АРЕНА':''} (прорыв!) —</span>`);
+    log(`<span class="sys">— Этап ${s}${gen.bossStage?' <img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""> БОСС-АРЕНА':''} (прорыв!) —</span>`);
     for (const e of Es) {
       if (pool <= 0) break;
       if (pool >= e.hp) { pool -= e.hp; e.hp = 0; }
@@ -3231,11 +2804,11 @@ function levelUp() {
   P.str++; P.agi++; P.int++;
   P.skillPts = (P.skillPts||0) + 1;
   hr();
-  log(`<span class="epic"><img class="gi" src="assets/icons/star-formation.svg" alt=""><img class="gi" src="assets/icons/star-formation.svg" alt=""><img class="gi" src="assets/icons/star-formation.svg" alt=""> УРОВЕНЬ ${P.lvl}! <img class="gi" src="assets/icons/star-formation.svg" alt=""><img class="gi" src="assets/icons/star-formation.svg" alt=""><img class="gi" src="assets/icons/star-formation.svg" alt=""></span> HP/MP полные, статы выросли, +1 очко умений.`);
+  log(`<span class="epic"><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""> УРОВЕНЬ ${P.lvl}! <img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""></span> HP/MP полные, статы выросли, +1 очко умений.`);
 }
 function victory() {
   hr();
-  log(`<span class="epic"><img class="gi" src="assets/icons/star-formation.svg" alt=""><img class="gi" src="assets/icons/star-formation.svg" alt=""><img class="gi" src="assets/icons/star-formation.svg" alt=""> ДРЕВНИЙ ДРАКОН ПОВЕРЖЕН! <img class="gi" src="assets/icons/star-formation.svg" alt=""><img class="gi" src="assets/icons/star-formation.svg" alt=""><img class="gi" src="assets/icons/star-formation.svg" alt=""></span>`);
+  log(`<span class="epic"><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""> ДРЕВНИЙ ДРАКОН ПОВЕРЖЕН! <img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""><img decoding="async" class="gi" src="assets/icons/star-formation.svg" alt=""></span>`);
   log(`<span class="epic">Имя ${P.name} навеки вписано в летописи Сумрачных Земель.</span>`);
   log(`<span class="sys">— КОНЕЦ ИГРЫ. Можешь продолжить охоту, но главное приключение завершено. —</span>`);
   stopCombatLoop(); inCombat=false; Es=[]; target=0;
@@ -3264,8 +2837,8 @@ function die() {
   P.gold = Math.max(0, P.gold-goldLoss);
   P.hp = Math.floor(eff('hpMax')/2);
   P.mp = Math.floor(eff('mpMax')/2);
-  log(`<span class="bad"><img class="gi" src="assets/icons/death-skull.svg" alt=""> Ты пал в бою...</span>`);
-  log(`<span class="sys">Духи возвращают тебя на этап ${newStage} (было ${oldStage}). Потеря: -${xpLoss} XP, -${goldLoss} <img class="gi" src="assets/icons/two-coins.svg" alt="">.</span>`);
+  log(`<span class="bad"><img decoding="async" class="gi" src="assets/icons/death-skull.svg" alt=""> Ты пал в бою...</span>`);
+  log(`<span class="sys">Духи возвращают тебя на этап ${newStage} (было ${oldStage}). Потеря: -${xpLoss} XP, -${goldLoss} <img decoding="async" class="gi" src="assets/icons/two-coins.svg" alt="">.</span>`);
   stopCombatLoop(); inCombat=false; Es=[]; target=0;
   render();
 }

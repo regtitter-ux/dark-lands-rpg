@@ -1,0 +1,17 @@
+<h1>Инвентарь</h1>
+<% const hasAny = Object.keys(it.resources).length > 0; %>
+<% if (!hasAny) { %>
+<p class="muted">Пусто. Добывайте ресурсы в игре или покупайте на <a href="<%= it.url('/market') %>">рынке</a>.</p>
+<% } else { %>
+<table>
+<tr><th>Ресурс</th><th>Кол-во</th></tr>
+<% for (const rid of it.RESOURCE_IDS) { %>
+<% const n = it.resources[rid] | 0; %>
+<% if (n > 0) { %>
+<tr><td><%= it.RESOURCE_NAMES[rid] %></td><td><b><%= n %></b></td></tr>
+<% } %>
+<% } %>
+</table>
+<% } %>
+<hr/>
+<%~ include('_nav', it) %>

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title><%= it.title %></title>
+<link rel="stylesheet" href="/styles/lite.css?v=<%= it.assetV %>"/>
+</head>
+<body>
+<%~ it.body %>
+<p class="ui-switch">
+<a href="/ui/lite?back=<%= encodeURIComponent(it.path) %>">Лёгкая версия</a>
+ · <a href="/app">Полный SPA</a>
+</p>
+</body>
+</html>

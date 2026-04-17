@@ -1,0 +1,15 @@
+<h1>Вход</h1>
+<% if (it.err) { %><p class="err"><%= it.err %></p><% } %>
+<form method="post" action="/lite/login" autocomplete="on">
+<% if (it.back) { %><input type="hidden" name="back" value="<%= it.back %>"/><% } %>
+<p>Имя
+<input type="text" name="username" maxlength="24" autocomplete="username"/></p>
+<p>Пароль
+<input type="password" name="password" maxlength="128" autocomplete="current-password"/></p>
+<p><button type="submit" class="btn" accesskey="5">5. Войти</button></p>
+</form>
+<hr/>
+<ul class="menu">
+<li><a href="/lite/register" accesskey="1">1. Регистрация</a></li>
+<li><a href="/lite" accesskey="0">0. На главную</a></li>
+</ul>

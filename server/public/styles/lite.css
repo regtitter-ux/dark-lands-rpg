@@ -1,0 +1,80 @@
+/* lite.css — минимальные стили для XHTML MP. Без flex/grid,
+   чтобы WAP-рендереры и старые браузеры не задыхались. */
+
+body {
+  font-family: Arial, sans-serif;
+  background: #1a0e08;
+  color: #d4b483;
+  margin: 0;
+  padding: 6px;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+a { color: #f4d03f; }
+a:visited { color: #b8860b; }
+a:active, a:focus { background: #4a2818; }
+
+h1 { font-size: 20px; margin: 4px 0 8px; color: #f4d03f; }
+h2 { font-size: 16px; margin: 8px 0 4px; color: #f4d03f; }
+
+hr { border: 0; border-top: 1px solid #4a2818; margin: 8px 0; }
+
+ul { margin: 0 0 6px; padding-left: 18px; }
+ul.menu, ol.menu { list-style: none; padding: 0; }
+ul.menu li, ol.menu li { padding: 3px 0; border-bottom: 1px dotted #4a2818; }
+
+.btn {
+  display: inline-block;
+  padding: 4px 10px;
+  border: 1px solid #6b4423;
+  background: #2a1810;
+  color: #f4d03f;
+  text-decoration: none;
+}
+
+form { margin: 4px 0; }
+input[type=text], input[type=password], input[type=number] {
+  background: #0a0503;
+  color: #d4b483;
+  border: 1px solid #6b4423;
+  padding: 3px 5px;
+  font-size: 15px;
+}
+
+.stat {
+  display: block;
+  padding: 2px 0;
+  border-bottom: 1px dotted #4a2818;
+}
+.stat b { color: #f4d03f; float: right; }
+
+.bar {
+  width: 100%;
+  height: 14px;
+  background: #0a0503;
+  border: 1px solid #6b4423;
+}
+.bar > span {
+  display: block;
+  height: 100%;
+  background: #6abe30;
+}
+.bar.hp > span { background: #c0392b; }
+.bar.mp > span { background: #3498db; }
+
+table { width: 100%; border-collapse: collapse; }
+td, th { padding: 3px 4px; border-bottom: 1px dotted #4a2818; font-size: 14px; text-align: left; }
+th { color: #f4d03f; }
+
+.muted { color: #8b6f47; font-size: 12px; }
+.err { color: #ff7b7b; }
+.ok { color: #6abe30; }
+
+.ui-switch {
+  margin-top: 12px;
+  padding-top: 6px;
+  border-top: 1px solid #4a2818;
+  font-size: 12px;
+  color: #8b6f47;
+}

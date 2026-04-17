@@ -1,0 +1,86 @@
+<h1>Арена — бой</h1>
+<% if (it.err) { %><p class="err"><%= it.err %></p><% } %>
+<% if (it.flash) { %><p class="ok"><%= it.flash %></p><% } %>
+
+<p class="stat">
+HP <b><%= it.me.hp %>/<%= it.me.hpMax %></b>
+ · MP <b><%= it.me.mp %>/<%= it.me.mpMax %></b>
+<% if (it.attackCdMs > 0) { %>
+ · удар ×<%= Math.ceil(it.attackCdMs / 1000) %>с
+<% } %>
+</p>
+
+<% if (it.me.dead) { %>
+<p class="err">Вы убиты<% if (it.killedByName) { %>: <b><%= it.killedByName %></b><% } %>.</p>
+<form method="post" action="<%= it.url('/lite/arena/leave') %>">
+<input type="hidden" name="_csrf" value="<%= it.csrf() %>"/>
+<p><button type="submit" class="btn" accesskey="0">0. В лобби</button></p>
+</form>
+<% } else { %>
+<% if (it.incoming && it.incoming.length) { %>
+<h2>События</h2>
+<ul class="feed">
+<% it.incoming.slice(-8).forEach(ev => { %>
+<li>
+<% if (ev.kind === 'attack') { %>
+<b><%= ev.byName %></b> бьёт на <%= ev.dmg %><% if (ev.crit) { %> (крит)<% } %>
+<% } else if (ev.kind === 'spell') { %>
+<b><%= ev.byName %></b>: <%= it.spellLabel(ev.spell) %> на <%= ev.dmg %>
+<% } else if (ev.kind === 'miss') { %>
+<b><%= ev.byName %></b> промахнулся
+<% } %>
+</li>
+<% }) %>
+</ul>
+<% } %>
+
+<% if (!it.liveTargets || !it.liveTargets.length) { %>
+<h2>Противники</h2>
+<p class="muted">Никого живого.</p>
+<% } else { %>
+<h2>Противники</h2>
+<% it.liveTargets.slice(0, 5).forEach((p, i) => { %>
+<p class="stat"><b><%= i + 1 %>.</b> <%= p.username %> (<%= p.cls || '?' %>/<%= p.lvl %>) · HP <%= p.hp %>/<%= p.hpMax %></p>
+<form method="post" action="<%= it.url('/lite/arena/action') %>">
+<input type="hidden" name="_csrf" value="<%= it.csrf() %>"/>
+<input type="hidden" name="type" value="attack"/>
+<input type="hidden" name="target_id" value="<%= p.id %>"/>
+<p><button type="submit" class="btn" accesskey="<%= i + 1 %>"<% if (it.attackCdMs > 0) { %> disabled="disabled"<% } %>><%= i + 1 %>. Атаковать</button></p>
+</form>
+<% }) %>
+<% } %>
+
+<% if (it.spells && it.spells.length) { %>
+<h2>Заклинания</h2>
+<% it.spells.forEach(sp => { %>
+<form method="post" action="<%= it.url('/lite/arena/action') %>">
+<input type="hidden" name="_csrf" value="<%= it.csrf() %>"/>
+<input type="hidden" name="type" value="cast"/>
+<input type="hidden" name="spell" value="<%= sp.key %>"/>
+<% if (sp.needsTarget) { %>
+<% if (it.liveTargets && it.liveTargets.length) { %>
+<p><%= sp.label %> (<%= sp.cost %> мп<% if (sp.cdMs > 0) { %>, CD <%= Math.ceil(sp.cdMs/1000) %>с<% } %>)
+<select name="target_id">
+<% it.liveTargets.forEach(p => { %>
+<option value="<%= p.id %>"><%= p.username %> (<%= p.hp %>/<%= p.hpMax %>)</option>
+<% }) %>
+</select></p>
+<p><button type="submit" class="btn"<% if (sp.disabled) { %> disabled="disabled"<% } %>>Кастовать</button></p>
+<% } else { %>
+<p class="muted"><%= sp.label %> — нет целей.</p>
+<% } %>
+<% } else { %>
+<p><button type="submit" class="btn"<% if (sp.disabled) { %> disabled="disabled"<% } %>><%= sp.label %> (<%= sp.cost %> мп<% if (sp.cdMs > 0) { %>, CD <%= Math.ceil(sp.cdMs/1000) %>с<% } %>)</button></p>
+<% } %>
+</form>
+<% }) %>
+<% } %>
+
+<form method="post" action="<%= it.url('/lite/arena/leave') %>">
+<input type="hidden" name="_csrf" value="<%= it.csrf() %>"/>
+<p><button type="submit" class="btn" accesskey="9">9. Выйти с арены</button></p>
+</form>
+<% } %>
+
+<hr/>
+<p><a href="<%= it.url('/city') %>">В город</a></p>

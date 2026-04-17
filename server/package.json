@@ -12,6 +12,8 @@
     "pg": "^8.13.1",
     "cors": "^2.8.5",
     "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "eta": "^3.4.0",
+    "compression": "^1.7.5"
   }
 }

@@ -1,0 +1,4 @@
+<h1>Эхо</h1>
+<p class="ok">CSRF проверен, POST принят.</p>
+<p class="stat">Ваше сообщение <b><%= it.msg %></b></p>
+<p><a href="<%= it.url('/lite/whoami') %>" accesskey="0">0. Назад</a></p>

@@ -1,0 +1,14 @@
+<h1>Регистрация</h1>
+<% if (it.err) { %><p class="err"><%= it.err %></p><% } %>
+<form method="post" action="/lite/register" autocomplete="on">
+<p>Имя (2–24 симв.)
+<input type="text" name="username" maxlength="24" autocomplete="username"/></p>
+<p>Пароль (6–128)
+<input type="password" name="password" maxlength="128" autocomplete="new-password"/></p>
+<p><button type="submit" class="btn" accesskey="5">5. Создать</button></p>
+</form>
+<hr/>
+<ul class="menu">
+<li><a href="/lite/login" accesskey="1">1. Войти</a></li>
+<li><a href="/lite" accesskey="0">0. На главную</a></li>
+</ul>

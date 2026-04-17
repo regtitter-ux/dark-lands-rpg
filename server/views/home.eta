@@ -1,0 +1,29 @@
+<h1>Сумрачные Земли</h1>
+<p>Лёгкая (lite) версия игры. Работает без JavaScript, на кнопочниках и при плохом интернете.</p>
+
+<% if (it.session) { %>
+<p>Привет, <b><%= it.session.username %></b>!</p>
+<h2>В игре</h2>
+<ul class="menu">
+<li><a href="<%= it.url('/city') %>" accesskey="1">1. В город</a></li>
+<li><a href="<%= it.url('/leaderboard') %>" accesskey="2">2. Таблица лидеров</a></li>
+</ul>
+<form method="post" action="<%= it.url('/lite/logout') %>">
+<input type="hidden" name="_csrf" value="<%= it.csrf() %>"/>
+<p><button type="submit" class="btn" accesskey="9">9. Выйти</button></p>
+</form>
+<% } else { %>
+<h2>Войти</h2>
+<ul class="menu">
+<li><a href="/lite/login" accesskey="1">1. Войти</a></li>
+<li><a href="/lite/register" accesskey="2">2. Регистрация</a></li>
+<li><a href="/leaderboard" accesskey="3">3. Таблица лидеров</a></li>
+<li><a href="/app" accesskey="4">4. Полная версия (SPA)</a></li>
+</ul>
+<% } %>
+
+<hr/>
+<p class="muted">
+ui: <b><%= it.mode %></b>
+ · cookieless: <b><%= it.cookieless ? 'да' : 'нет' %></b>
+</p>

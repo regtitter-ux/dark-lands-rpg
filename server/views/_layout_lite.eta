@@ -1,0 +1,20 @@
+<!DOCTYPE html PUBLIC "-//WAPFORUM//DTD XHTML Mobile 1.0//EN" "http://www.wapforum.org/DTD/xhtml-mobile10.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="ru">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+<title><%= it.title %></title>
+<link rel="stylesheet" type="text/css" href="<%= it.asset('lite') %>"/>
+<% if (it.refresh && it.refresh.seconds > 0 && it.refresh.to) { %>
+<meta http-equiv="refresh" content="<%= it.refresh.seconds %>; url=<%= it.refresh.to %>"/>
+<% } %>
+</head>
+<body>
+<%~ it.body %>
+<div class="ui-switch">
+<a href="/ui/rich?back=<%= encodeURIComponent(it.path) %>" accesskey="0">0. Полная версия</a>
+</div>
+</body>
+</html>

@@ -1,0 +1,21 @@
+<h1>Моя сессия</h1>
+<% if (!it.session) { %>
+<p class="err">Не авторизован.</p>
+<p><a href="/lite/login" accesskey="1">1. Войти</a> · <a href="/lite" accesskey="0">0. На главную</a></p>
+<% } else { %>
+<p class="stat">Имя <b><%= it.session.username %></b></p>
+<p class="stat">UID <b><%= it.session.uid %></b></p>
+<p class="stat">Token ver <b><%= it.session.tv %></b></p>
+<p class="stat">Cookieless <b><%= it.cookieless ? 'да' : 'нет' %></b></p>
+
+<h2>Демо POST с CSRF</h2>
+<form method="post" action="<%= it.url('/lite/echo') %>">
+<input type="hidden" name="_csrf" value="<%= it.csrf() %>"/>
+<p>Сообщение
+<input type="text" name="msg" value="привет"/></p>
+<p><button class="btn" type="submit" accesskey="5">5. Отправить</button></p>
+</form>
+
+<hr/>
+<%~ include('_nav', it) %>
+<% } %>

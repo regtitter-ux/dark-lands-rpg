@@ -1,0 +1,63 @@
+<h1>Рынок</h1>
+<p class="stat">Локация <b><%= it.TRADER_NAMES[it.loc] %></b></p>
+<p class="stat">Ваше золото <b><%= it.gold %></b></p>
+
+<% if (it.ok) { %><p class="ok">Сделка прошла.</p><% } %>
+<% if (it.flash && !it.ok) { %><p class="err"><%= it.flash %></p><% } %>
+
+<h2>Выбор локации</h2>
+<form method="get" action="<%= it.url('/market') %>">
+<p><select name="loc">
+<% for (const loc of it.LOCATION_IDS) { %>
+<option value="<%= loc %>"<% if (loc === it.loc) { %> selected="selected"<% } %>><%= it.TRADER_NAMES[loc] %></option>
+<% } %>
+</select>
+<button type="submit" class="btn" accesskey="6">6. Перейти</button></p>
+</form>
+
+<h2>Цены и сделки</h2>
+<table>
+<tr><th>Ресурс</th><th>Цена</th><th>У вас</th><th>Купить</th><th>Продать</th></tr>
+<% for (const rid of it.RESOURCE_IDS) { %>
+<% const price = (it.market.prices[it.loc] && it.market.prices[it.loc][rid]) | 0; %>
+<% const stock = (it.market.stock[it.loc] && it.market.stock[it.loc][rid]) | 0; %>
+<% const have = it.resources[rid] | 0; %>
+<tr>
+<td><%= it.RESOURCE_NAMES[rid] %></td>
+<td><%= price %></td>
+<td><%= have %></td>
+<td>
+<form method="post" action="<%= it.url('/lite/market/trade') %>">
+<input type="hidden" name="_csrf" value="<%= it.csrf() %>"/>
+<input type="hidden" name="loc" value="<%= it.loc %>"/>
+<input type="hidden" name="rid" value="<%= rid %>"/>
+<input type="hidden" name="action" value="buy"/>
+<input type="number" name="qty" value="1" min="1" max="<%= stock || 9999 %>" size="3"/>
+<button type="submit" class="btn">+</button>
+</form>
+</td>
+<td>
+<form method="post" action="<%= it.url('/lite/market/trade') %>">
+<input type="hidden" name="_csrf" value="<%= it.csrf() %>"/>
+<input type="hidden" name="loc" value="<%= it.loc %>"/>
+<input type="hidden" name="rid" value="<%= rid %>"/>
+<input type="hidden" name="action" value="sell"/>
+<input type="number" name="qty" value="1" min="1" max="<%= have || 9999 %>" size="3"/>
+<button type="submit" class="btn">−</button>
+</form>
+</td>
+</tr>
+<% } %>
+</table>
+
+<% if (it.market.news && it.market.news.length) { %>
+<h2>Слухи</h2>
+<ul>
+<% for (const n of it.market.news) { %>
+<% if (n.loc === it.loc) { %><li><%= n.text %></li><% } %>
+<% } %>
+</ul>
+<% } %>
+
+<hr/>
+<%~ include('_nav', it) %>

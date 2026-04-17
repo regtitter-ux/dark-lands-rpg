@@ -1,11 +1,24 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { uiModeMiddleware, setUiCookie, safeBackPath } from './lib/ui-mode.js';
+import { renderPage } from './lib/render.js';
+import {
+  configureSession,
+  stripSessionPathParam,
+  sessionMiddleware,
+  issueSession,
+  clearSession,
+  requireCsrf,
+  urlFor,
+} from './lib/session.js';
+import { initAssets, hashedStylesMiddleware, getSpaHtml } from './lib/assets.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -118,6 +131,8 @@ async function initDb() {
 }
 
 const app = express();
+app.use(compression());
+app.use(stripSessionPathParam);
 app.use(cors({
   origin: [
     'https://regtitter-ux.github.io',
@@ -128,7 +143,587 @@ app.use(cors({
   credentials: false,
 }));
 app.use(express.json({ limit: '256kb' }));
-app.use(express.static(path.join(__dirname, 'public'), { index: 'index.html', extensions: ['html'] }));
+app.use(express.urlencoded({ extended: false, limit: '64kb' }));
+app.use(uiModeMiddleware);
+app.use(sessionMiddleware);
+
+const publicDir = path.join(__dirname, 'public');
+const spaIndex = path.join(publicDir, 'index.html');
+
+app.get('/ui/:mode', (req, res) => {
+  const mode = String(req.params.mode || '').toLowerCase();
+  if (mode !== 'lite' && mode !== 'rich') return res.status(400).send('bad mode');
+  setUiCookie(res, mode);
+  const back = safeBackPath(req.query.back, '/');
+  res.redirect(303, urlFor(req, back));
+});
+
+app.get('/lite', (req, res) => {
+  req.uiMode = 'lite';
+  if (req.session) return res.redirect(303, urlFor(req, '/city'));
+  renderPage(req, res, 'home');
+});
+
+app.get('/lite/whoami', (req, res) => {
+  req.uiMode = 'lite';
+  renderPage(req, res, 'whoami');
+});
+
+app.post('/lite/echo', requireCsrf, (req, res) => {
+  req.uiMode = 'lite';
+  const msg = String(req.body?.msg || '').slice(0, 120);
+  renderPage(req, res, 'echo', { msg });
+});
+
+app.post('/lite/logout', requireCsrf, (req, res) => {
+  clearSession(res);
+  req.session = null;
+  req.sessionToken = null;
+  req.cookieless = false;
+  req.uiMode = 'lite';
+  res.redirect(303, '/lite');
+});
+
+// ---------- LITE: auth + game pages (Phase 3) ----------
+
+function requireSession(req, res, next) {
+  if (req.session) return next();
+  const here = req.originalUrl || req.url || '/';
+  return res.redirect(303, '/lite/login?back=' + encodeURIComponent(here));
+}
+
+function renderLogin(req, res, extra = {}) {
+  req.uiMode = 'lite';
+  renderPage(req, res, 'login', { back: '', ...extra });
+}
+function renderRegister(req, res, extra = {}) {
+  req.uiMode = 'lite';
+  renderPage(req, res, 'register', extra);
+}
+
+app.get('/lite/login', (req, res) => {
+  if (req.session) return res.redirect(303, urlFor(req, '/city'));
+  const back = typeof req.query.back === 'string' ? req.query.back : '';
+  renderLogin(req, res, { back: safeBackPath(back, '') });
+});
+
+app.post('/lite/login', authRateLimit, async (req, res) => {
+  const username = String(req.body?.username || '').trim();
+  const password = String(req.body?.password || '');
+  const back = safeBackPath(req.body?.back, '/city');
+  if (!username || !password) return renderLogin(req, res, { err: 'Заполните все поля', back });
+  try {
+    const r = await pool.query(
+      `SELECT id, username, password_hash, token_version FROM users WHERE LOWER(username) = LOWER($1)`,
+      [username]
+    );
+    if (!r.rowCount) return renderLogin(req, res, { err: 'Неверные данные', back });
+    const u = r.rows[0];
+    const ok = await bcrypt.compare(password, u.password_hash);
+    if (!ok) return renderLogin(req, res, { err: 'Неверные данные', back });
+    const token = signToken(u);
+    issueSession(res, token);
+    // On the first redirect we don't yet know if the browser accepts cookies.
+    // Carry the token in the URL as `;s=` so cookieless clients stay logged in;
+    // if cookies work, the next request will prefer the cookie and drop `;s=`.
+    req.sessionToken = token;
+    req.cookieless = true;
+    res.redirect(303, urlFor(req, back));
+  } catch (e) {
+    console.error('lite login error:', e);
+    renderLogin(req, res, { err: 'Ошибка БД', back });
+  }
+});
+
+app.get('/lite/register', (req, res) => {
+  if (req.session) return res.redirect(303, urlFor(req, '/city'));
+  renderRegister(req, res);
+});
+
+app.post('/lite/register', authRateLimit, async (req, res) => {
+  const username = String(req.body?.username || '').trim().slice(0, 24);
+  const password = String(req.body?.password || '');
+  if (!validUsername(username)) return renderRegister(req, res, { err: 'Неверное имя (2–24 симв.)' });
+  if (!validPassword(password)) return renderRegister(req, res, { err: 'Пароль 6–128 символов' });
+  const client = await pool.connect();
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    await client.query('BEGIN');
+    const r = await client.query(
+      `INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING id, username, token_version`,
+      [username, hash]
+    );
+    const user = r.rows[0];
+    await client.query(`INSERT INTO player_data (user_id) VALUES ($1)`, [user.id]);
+    await client.query('COMMIT');
+    const token = signToken(user);
+    issueSession(res, token);
+    req.sessionToken = token;
+    req.cookieless = true;
+    res.redirect(303, urlFor(req, '/city'));
+  } catch (e) {
+    await client.query('ROLLBACK').catch(()=>{});
+    if (e.code === '23505') return renderRegister(req, res, { err: 'Имя занято' });
+    console.error('lite register error:', e);
+    renderRegister(req, res, { err: 'Ошибка БД' });
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/city', requireSession, async (req, res) => {
+  req.uiMode = 'lite';
+  try {
+    const r = await pool.query(
+      `SELECT u.username, p.cls, p.lvl, p.stage_max,
+              GREATEST(0, p.gold + p.pending_gold_delta) AS gold,
+              p.bosses, p.pvp_kills, p.resources
+         FROM users u JOIN player_data p ON p.user_id = u.id
+        WHERE u.id = $1`,
+      [req.session.uid]
+    );
+    const me = r.rows[0] || { username: req.session.username };
+    const resources = sanitizeResources(me.resources);
+    const totalRes = Object.values(resources).reduce((a, b) => a + b, 0);
+    renderPage(req, res, 'city', { me, totalRes });
+  } catch (e) {
+    console.error('lite /city:', e);
+    renderPage(req, res, 'city', { me: { username: req.session.username }, totalRes: 0, err: 'БД недоступна' });
+  }
+});
+
+app.get('/inventory', requireSession, async (req, res) => {
+  req.uiMode = 'lite';
+  try {
+    const r = await pool.query(`SELECT resources FROM player_data WHERE user_id = $1`, [req.session.uid]);
+    const resources = sanitizeResources(r.rows[0]?.resources);
+    renderPage(req, res, 'inventory', { resources, RESOURCE_IDS, RESOURCE_NAMES });
+  } catch (e) {
+    console.error('lite /inventory:', e);
+    renderPage(req, res, 'inventory', { resources: {}, RESOURCE_IDS, RESOURCE_NAMES });
+  }
+});
+
+app.get('/market', requireSession, async (req, res) => {
+  req.uiMode = 'lite';
+  ensureMarket();
+  const loc = LOCATION_IDS.includes(req.query.loc) ? req.query.loc : LOCATION_IDS[0];
+  try {
+    const r = await pool.query(
+      `SELECT GREATEST(0, gold + pending_gold_delta) AS gold, resources
+         FROM player_data WHERE user_id = $1`,
+      [req.session.uid]
+    );
+    const gold = r.rows[0]?.gold || 0;
+    const resources = sanitizeResources(r.rows[0]?.resources);
+    renderPage(req, res, 'market', {
+      loc, gold, resources,
+      market: snapshotMarket(),
+      LOCATION_IDS, RESOURCE_IDS, RESOURCE_NAMES, TRADER_NAMES,
+      flash: typeof req.query.err === 'string' ? req.query.err : '',
+      ok: req.query.ok === '1',
+    });
+  } catch (e) {
+    console.error('lite /market:', e);
+    renderPage(req, res, 'market', {
+      loc, gold: 0, resources: {},
+      market: snapshotMarket(),
+      LOCATION_IDS, RESOURCE_IDS, RESOURCE_NAMES, TRADER_NAMES,
+      flash: 'БД недоступна', ok: false,
+    });
+  }
+});
+
+app.post('/lite/market/trade', requireSession, requireCsrf, async (req, res) => {
+  ensureMarket();
+  const loc = String(req.body?.loc || '');
+  const rid = String(req.body?.rid || '');
+  const action = String(req.body?.action || '');
+  const qty = parseInt(req.body?.qty, 10) | 0;
+  if (!LOCATION_IDS.includes(loc) || !RESOURCE_IDS.includes(rid)) {
+    return res.redirect(303, urlFor(req, '/market?err=' + encodeURIComponent('неверный запрос')));
+  }
+  if (action !== 'buy' && action !== 'sell') {
+    return res.redirect(303, urlFor(req, `/market?loc=${loc}&err=` + encodeURIComponent('неверное действие')));
+  }
+  const n = Math.max(1, Math.min(MAX_TRADE_QTY, qty));
+  const price = (market.prices[loc]?.[rid]) | 0;
+  const total = price * n;
+
+  const bail = (msg) => res.redirect(303, urlFor(req, `/market?loc=${loc}&err=` + encodeURIComponent(msg)));
+
+  await withTradeLock(`${loc}:${rid}`, async () => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const pr = await client.query(
+        `SELECT GREATEST(0, gold + pending_gold_delta) AS eff, resources
+           FROM player_data WHERE user_id = $1 FOR UPDATE`,
+        [req.session.uid]
+      );
+      if (!pr.rowCount) { await client.query('ROLLBACK'); return bail('нет игрока'); }
+      const eff = pr.rows[0].eff | 0;
+      const resources = sanitizeResources(pr.rows[0].resources);
+
+      if (action === 'buy') {
+        const stock = market.stock[loc][rid] | 0;
+        if (stock < n) { await client.query('ROLLBACK'); return bail('нет в наличии'); }
+        if (eff < total) { await client.query('ROLLBACK'); return bail('не хватает золота'); }
+        resources[rid] = (resources[rid] | 0) + n;
+        await client.query(
+          `UPDATE player_data
+              SET gold = GREATEST(0, gold + pending_gold_delta - $1),
+                  pending_gold_delta = 0,
+                  resources = $2::jsonb,
+                  updated_at = NOW()
+            WHERE user_id = $3`,
+          [total, JSON.stringify(resources), req.session.uid]
+        );
+        market.stock[loc][rid] = stock - n;
+      } else {
+        const owned = resources[rid] | 0;
+        if (owned < n) { await client.query('ROLLBACK'); return bail('не хватает ресурса'); }
+        resources[rid] = owned - n;
+        if (resources[rid] <= 0) delete resources[rid];
+        await client.query(
+          `UPDATE player_data
+              SET gold = GREATEST(0, gold + pending_gold_delta + $1),
+                  pending_gold_delta = 0,
+                  resources = $2::jsonb,
+                  updated_at = NOW()
+            WHERE user_id = $3`,
+          [total, JSON.stringify(resources), req.session.uid]
+        );
+        market.stock[loc][rid] = (market.stock[loc][rid] | 0) + n;
+      }
+      await client.query('COMMIT');
+      persistMarket();
+      res.redirect(303, urlFor(req, `/market?loc=${loc}&ok=1`));
+    } catch (e) {
+      await client.query('ROLLBACK').catch(()=>{});
+      console.error('lite trade error:', e);
+      bail('ошибка БД');
+    } finally {
+      client.release();
+    }
+  });
+});
+
+app.get('/arena', requireSession, (req, res) => {
+  req.uiMode = 'lite';
+  const uid = req.session.uid;
+  const now = Date.now();
+  const self = arena.get(uid);
+  if (self && !self.dead) return res.redirect(303, urlFor(req, '/arena/fight'));
+  const lastDeath = lastDeathAt.get(uid) || 0;
+  const respawnMs = lastDeath ? Math.max(0, RESPAWN_CD_MS - (now - lastDeath)) : 0;
+  const players = arenaListFor(uid);
+  const refresh = respawnMs > 0 ? { seconds: 2, to: urlFor(req, '/arena') } : null;
+  renderPage(req, res, 'arena', {
+    players,
+    arenaCount: arena.size,
+    dead: !!(self && self.dead),
+    respawnMs,
+    refresh,
+    ok: req.query.ok === '1',
+    err: typeof req.query.err === 'string' ? req.query.err : '',
+  });
+});
+
+app.get('/arena/fight', requireSession, async (req, res) => {
+  req.uiMode = 'lite';
+  const uid = req.session.uid;
+  const clientRev = Number(req.query.v) | 0;
+  let self = arena.get(uid);
+  if (!self) return res.redirect(303, urlFor(req, '/arena'));
+
+  // Long-poll: if the client already saw the current rev and there's nothing
+  // immediately to show (alive, no pending incoming events), hold until either
+  // something changes (bump) or the timeout elapses. Request close also unblocks.
+  const canWait = !self.dead && !(self.incoming && self.incoming.length > 0);
+  if (canWait) {
+    await waitArenaRev(clientRev, ARENA_LONGPOLL_MS, req);
+    self = arena.get(uid);
+    if (!self) return res.redirect(303, urlFor(req, '/arena'));
+  }
+
+  const now = Date.now();
+  self.lastSeen = now;
+  tickRegen(self, now);
+
+  const incoming = self.incoming || [];
+  self.incoming = [];
+
+  const killedByName = self.dead && self.killedBy
+    ? (arena.get(self.killedBy)?.username || '')
+    : '';
+  const players = arenaListFor(uid);
+  const liveTargets = players.filter(p => !p.dead);
+  const attackCdMs = Math.max(0, (self.lastAttack + ATTACK_CD_MS) - now);
+
+  const spells = [];
+  for (const key of Object.keys(SPELLS)) {
+    const lvl = (self.spellLvl && self.spellLvl[key]) | 0;
+    if (lvl <= 0) continue;
+    const sp = SPELLS[key];
+    const cdMs = Math.max(0, ((self.spellCd && self.spellCd[key]) || 0) - now);
+    const needsTarget = !sp.heal && sp.aoe !== 'all';
+    const noTargets = liveTargets.length === 0;
+    const disabled = cdMs > 0 || self.mp < sp.cost ||
+      (!sp.heal && sp.aoe === 'all' && noTargets) ||
+      (needsTarget && noTargets);
+    spells.push({
+      key, label: SPELL_LABELS[key] || key,
+      cost: sp.cost, cdMs, needsTarget, disabled,
+    });
+  }
+
+  const refresh = self.dead
+    ? { seconds: 2, to: urlFor(req, '/arena') }
+    : { seconds: 3, to: urlFor(req, '/arena/fight?v=' + arenaRev) };
+  renderPage(req, res, 'arena_fight', {
+    me: {
+      hp: self.hp, hpMax: self.hpMax,
+      mp: self.mp, mpMax: self.mpMax,
+      dead: !!self.dead,
+    },
+    killedByName,
+    players, liveTargets,
+    attackCdMs, spells, incoming,
+    refresh,
+    spellLabel: (k) => SPELL_LABELS[k] || k,
+    flash: req.query.ok === '1' ? 'Готово' : '',
+    err: typeof req.query.err === 'string' ? req.query.err : '',
+  });
+});
+
+app.post('/lite/arena/enter', requireSession, requireCsrf, async (req, res) => {
+  const uid = req.session.uid;
+  const toLobby = (err) => res.redirect(303,
+    urlFor(req, '/arena' + (err ? '?err=' + encodeURIComponent(err) : '')));
+  await withEnterLock(uid, async () => {
+    try {
+      const now = Date.now();
+      const cur = arena.get(uid);
+      if (cur && !cur.dead) {
+        cur.lastSeen = now;
+        return res.redirect(303, urlFor(req, '/arena/fight'));
+      }
+      const lastDeath = lastDeathAt.get(uid) || 0;
+      if (lastDeath && now - lastDeath < RESPAWN_CD_MS) {
+        return toLobby('Ожидание возрождения');
+      }
+      const base = await loadPlayerBase(uid);
+      if (!base) return toLobby('Игрок не найден');
+      const stats = sanitizeStats(base.pvp_stats || {}, base.lvl | 0);
+      const spellLvl = sanitizeSpellLvl(base.pvp_spell_lvl) || {};
+      const wasPresent = !!cur;
+      arena.set(uid, {
+        username: base.username, cls: base.cls, lvl: base.lvl | 0,
+        hpMax: stats.hpMax, hp: stats.hpMax,
+        mpMax: stats.mpMax, mp: stats.mpMax,
+        str: stats.str, agi: stats.agi, int_: stats.int_,
+        armor: stats.armor, crit: stats.crit, wdmg: stats.wdmg,
+        spellLvl, spellCd: {},
+        lastAttack: 0, lastRegen: now, lastSeen: now,
+        lastActionAt: 0, lastStateAt: 0,
+        dead: false, killedBy: null, deathAt: 0, _resolving: false,
+        pvp_kills: base.pvp_kills | 0, incoming: [],
+      });
+      bumpArenaRev();
+      if (!wasPresent && feedThrottle('enter', uid)) {
+        emitFeed(pickTpl(FEED_ENTER)(base.username), uid, null, 'enter');
+      }
+      res.redirect(303, urlFor(req, '/arena/fight'));
+    } catch (e) {
+      console.error('lite /arena/enter:', e);
+      toLobby('Ошибка БД');
+    }
+  });
+});
+
+app.post('/lite/arena/leave', requireSession, requireCsrf, (req, res) => {
+  const uid = req.session.uid;
+  const p = arena.get(uid);
+  if (p) {
+    arena.delete(uid);
+    bumpArenaRev();
+    if (!p.dead && feedThrottle('leave', uid)) {
+      emitFeed(pickTpl(FEED_LEAVE)(p.username), uid, null, 'leave');
+    }
+  }
+  res.redirect(303, urlFor(req, '/arena'));
+});
+
+app.post('/lite/arena/action', requireSession, requireCsrf, async (req, res) => {
+  const uid = req.session.uid;
+  const type = String(req.body?.type || '');
+  const now = Date.now();
+  const self = arena.get(uid);
+  const toFight = (err) => res.redirect(303,
+    urlFor(req, '/arena/fight' + (err ? '?err=' + encodeURIComponent(err) : '')));
+  if (!self) return res.redirect(303, urlFor(req, '/arena'));
+  if (self.dead) return toFight();
+  if (now - (self.lastActionAt || 0) < ARENA_ACTION_MIN_MS) {
+    return toFight('слишком часто');
+  }
+  self.lastActionAt = now;
+  self.lastSeen = now;
+  tickRegen(self, now);
+
+  if (type === 'attack') {
+    const tid = parseTargetId(req.body?.target_id);
+    if (!tid || tid === uid) return toFight('неверная цель');
+    const tgt = arena.get(tid);
+    if (!tgt || tgt.dead) return toFight('цель выбыла');
+    if (now - self.lastAttack < ATTACK_CD_MS) return toFight('удар на перезарядке');
+    self.lastAttack = now;
+    tickRegen(tgt, now);
+    const dodge = Math.min(0.35, tgt.agi * 0.012);
+    if (Math.random() < dodge) {
+      pushIncoming(tgt, { kind:'miss', by: uid, byName: self.username, at: now });
+      return toFight();
+    }
+    let dmg = Math.floor(rndF(self.wdmg[0], self.wdmg[1]) + self.str / 2);
+    const crit = Math.random() < self.crit;
+    if (crit) dmg = Math.floor(dmg * 1.7);
+    dmg = Math.max(1, dmg - Math.floor(tgt.armor / 2));
+    tgt.hp = Math.max(0, tgt.hp - dmg);
+    bumpArenaRev();
+    pushIncoming(tgt, { kind:'attack', by: uid, byName: self.username, dmg, crit, at: now });
+    if (tgt.hp <= 0 && claimKill(tgt, uid, now)) {
+      const r = await resolveKill(uid, tid);
+      if (r.pvp_kills | 0) self.pvp_kills = r.pvp_kills | 0;
+    }
+    return toFight();
+  }
+
+  if (type === 'cast') {
+    const key = String(req.body?.spell || '');
+    const sp = SPELLS[key];
+    if (!sp) return toFight('неверное заклинание');
+    const lvl = (self.spellLvl && self.spellLvl[key]) | 0;
+    if (lvl <= 0) return toFight('заклинание не изучено');
+    const cdAt = self.spellCd[key] || 0;
+    if (cdAt > now) return toFight('заклинание на перезарядке');
+    if (self.mp < sp.cost) return toFight('мало маны');
+
+    const tid = parseTargetId(req.body?.target_id);
+    const primary = tid && tid !== uid ? arena.get(tid) : null;
+    if (!sp.heal) {
+      if (sp.aoe === 'all') {
+        if (liveOpponentCount(uid) === 0) return toFight('нет цели');
+      } else {
+        if (!primary || primary.dead) return toFight('нет цели');
+      }
+    }
+
+    self.mp -= sp.cost;
+    self.spellCd[key] = now + SPELL_CD_MS;
+    bumpArenaRev();
+    const mul = spellMul(self.spellLvl, key);
+
+    if (sp.heal) {
+      const h = Math.ceil((rndI(sp.heal[0], sp.heal[1]) + self.int_) * mul);
+      self.hp = Math.min(self.hpMax, self.hp + h);
+      return toFight();
+    }
+
+    const base = Math.ceil((rndI(sp.dmg[0], sp.dmg[1]) + self.int_) * mul);
+    const killedTargets = [];
+
+    const doHit = (targetId, target, hitDmg) => {
+      if (target.dead) return;
+      tickRegen(target, now);
+      const dodge = Math.min(0.35, target.agi * 0.012);
+      if (Math.random() < dodge) {
+        pushIncoming(target, { kind:'miss', by: uid, byName: self.username, spell: key, at: now });
+        return;
+      }
+      const applied = applyDamage(target, now, hitDmg);
+      pushIncoming(target, { kind:'spell', by: uid, byName: self.username, spell: key, dmg: applied, at: now });
+      if (target.hp <= 0 && claimKill(target, uid, now)) killedTargets.push(targetId);
+    };
+
+    if (sp.aoe === 'all') {
+      const dealt = Math.max(1, Math.floor(base * (sp.mult || 0.7)));
+      for (const [id, p] of arena) {
+        if (id === uid || p.dead) continue;
+        doHit(id, p, dealt);
+      }
+    } else if (sp.aoe === 'chain') {
+      doHit(tid, primary, base);
+      const splash = Math.max(1, Math.floor(base * (sp.chain || 0.5)));
+      for (const [id, p] of arena) {
+        if (id === uid || id === tid || p.dead) continue;
+        doHit(id, p, splash);
+      }
+    } else {
+      doHit(tid, primary, base);
+    }
+
+    for (const loserId of killedTargets) {
+      const r = await resolveKill(uid, loserId);
+      if (r.pvp_kills | 0) self.pvp_kills = r.pvp_kills | 0;
+    }
+    return toFight();
+  }
+
+  return toFight('неверное действие');
+});
+
+app.get('/leaderboard', async (req, res, next) => {
+  // Browser navigations (Accept: text/html) get the lite page;
+  // JSON clients continue to hit /api/leaderboard.
+  const accept = String(req.headers.accept || '');
+  if (!accept.includes('text/html') && !accept.includes('application/xhtml')) return next();
+  req.uiMode = 'lite';
+  try {
+    const now = Date.now();
+    let rows = leaderboardCache.data;
+    if (!rows || now - leaderboardCache.at >= LEADERBOARD_TTL_MS) {
+      rows = await fetchLeaderboard();
+      leaderboardCache = { at: Date.now(), data: rows, inflight: null };
+    }
+    renderPage(req, res, 'leaderboard', { rows });
+  } catch (e) {
+    console.error('lite /leaderboard:', e);
+    renderPage(req, res, 'leaderboard', { rows: [], err: 'БД недоступна' });
+  }
+});
+
+function sendSpa(_req, res) {
+  res.set('Cache-Control', 'no-store');
+  const html = getSpaHtml();
+  if (html) {
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    return res.send(html);
+  }
+  res.sendFile(spaIndex);
+}
+app.get('/app', sendSpa);
+app.get('/index.html', sendSpa);
+
+app.get('/', (req, res, next) => {
+  if (req.uiMode === 'lite') return renderPage(req, res, 'home');
+  return sendSpa(req, res);
+});
+
+app.use(hashedStylesMiddleware);
+app.use(express.static(publicDir, {
+  index: false,
+  extensions: ['html'],
+  setHeaders(res, filePath) {
+    if (/\.html$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-store');
+    } else if (/[\\/]styles[\\/][^\\/]+\.css$/i.test(filePath)) {
+      // Unhashed /styles/*.css (dev/fallback): cache but revalidate.
+      res.setHeader('Cache-Control', 'no-cache');
+    } else if (/\.(css|js|png|jpg|jpeg|svg|gif|webp|woff2?|ttf|otf|ico)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  },
+}));
 
 app.get('/health', async (_req, res) => {
   try {
@@ -237,7 +832,9 @@ app.post('/api/auth/register', authRateLimit, async (req, res) => {
     const user = r.rows[0];
     await client.query(`INSERT INTO player_data (user_id) VALUES ($1)`, [user.id]);
     await client.query('COMMIT');
-    res.json({ token: signToken(user), username: user.username });
+    const token = signToken(user);
+    issueSession(res, token);
+    res.json({ token, username: user.username });
   } catch (e) {
     await client.query('ROLLBACK').catch(()=>{});
     if (e.code === '23505') return res.status(409).json({ error: 'username taken' });
@@ -261,7 +858,9 @@ app.post('/api/auth/login', authRateLimit, async (req, res) => {
     const u = r.rows[0];
     const ok = await bcrypt.compare(password, u.password_hash);
     if (!ok) return res.status(401).json({ error: 'wrong credentials' });
-    res.json({ token: signToken(u), username: u.username });
+    const token = signToken(u);
+    issueSession(res, token);
+    res.json({ token, username: u.username });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'db error' });
@@ -320,6 +919,7 @@ app.delete('/api/me', auth, async (req, res) => {
     invalidateTv(req.user.uid);
     await pool.query(`DELETE FROM users WHERE id = $1`, [req.user.uid]);
     arena.delete(req.user.uid);
+    bumpArenaRev();
     lastDeathAt.delete(req.user.uid);
     res.json({ ok: true });
   } catch (e) {
@@ -992,6 +1592,42 @@ const SPELL_CD_MS = 30000;
 const RESPAWN_CD_MS = 10000;       // minimum time after death before re-entering
 const ARENA_ACTION_MIN_MS = 80;    // per-uid min interval between /arena/action calls
 const ARENA_STATE_MIN_MS = 250;    // per-uid min interval between /arena/state polls
+const ARENA_LONGPOLL_MS = 20000;   // max hold time for /arena/fight + /api/arena/state long-polls
+
+// Monotonic arena revision — bumped on any state change (enter, leave, dmg, regen, etc).
+// Long-poll clients pass their last-seen rev as `?v=N` and we hold until rev advances.
+let arenaRev = 0;
+const arenaWaiters = new Set();
+function bumpArenaRev() {
+  arenaRev++;
+  if (arenaWaiters.size === 0) return;
+  const snap = [...arenaWaiters];
+  arenaWaiters.clear();
+  for (const w of snap) {
+    if (w.timer) clearTimeout(w.timer);
+    w.resolve(arenaRev);
+  }
+}
+function waitArenaRev(clientRev, timeoutMs, req) {
+  if (arenaRev > clientRev) return Promise.resolve(arenaRev);
+  return new Promise(resolve => {
+    const w = { resolve, timer: null };
+    w.timer = setTimeout(() => {
+      arenaWaiters.delete(w);
+      resolve(arenaRev);
+    }, timeoutMs);
+    arenaWaiters.add(w);
+    if (req) {
+      const onClose = () => {
+        if (arenaWaiters.delete(w)) {
+          clearTimeout(w.timer);
+          resolve(arenaRev);
+        }
+      };
+      req.once('close', onClose);
+    }
+  });
+}
 
 const SPELLS = {
   fireball:   { cost:12, dmg:[14,22] },
@@ -1006,11 +1642,25 @@ const SPELLS = {
   cleave:     { cost:14, dmg:[20,30], aoe:'chain', chain:0.5 },
   whirlwind:  { cost:22, dmg:[18,28], aoe:'all',   mult:0.6 },
 };
+const SPELL_LABELS = {
+  fireball:  'Огненный шар',
+  iceshard:  'Ледяной осколок',
+  lightning: 'Цепная молния',
+  frostnova: 'Ледяной удар',
+  heal:      'Исцеление',
+  poison:    'Отравленный клинок',
+  shadow:    'Удар из тени',
+  smokebomb: 'Дымовая бомба',
+  rage:      'Боевой клич',
+  cleave:    'Рассекающий удар',
+  whirlwind: 'Вихрь клинков',
+};
 function spellMul(spellLvl, key) { return 1 + 0.2 * ((spellLvl && spellLvl[key]) || 0); }
 function rndI(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
 function applyDamage(tgt, now, dmg) {
   dmg = Math.max(1, Math.floor(dmg));
   tgt.hp = Math.max(0, tgt.hp - dmg);
+  bumpArenaRev();
   return dmg;
 }
 
@@ -1027,13 +1677,20 @@ function pushIncoming(target, ev) {
 
 function arenaPrune() {
   const now = Date.now();
+  let changed = false;
   for (const [id, p] of arena) {
-    if (p.dead && now - p.deathAt > CORPSE_LINGER_MS) { arena.delete(id); continue; }
+    if (p.dead && now - p.deathAt > CORPSE_LINGER_MS) {
+      arena.delete(id);
+      changed = true;
+      continue;
+    }
     if (!p.dead && now - p.lastSeen > ARENA_TIMEOUT_MS) {
       arena.delete(id);
+      changed = true;
       if (feedThrottle('leave', id)) emitFeed(pickTpl(FEED_LEAVE)(p.username), id, null, 'leave');
     }
   }
+  return changed;
 }
 function tickRegen(p, now) {
   if (p.dead) return;
@@ -1060,8 +1717,13 @@ function arenaListFor(uid) {
 // so /api/arena/state handlers stay O(N) only in map iteration (no per-player work).
 setInterval(() => {
   const now = Date.now();
-  arenaPrune();
-  for (const p of arena.values()) tickRegen(p, now);
+  let changed = arenaPrune();
+  for (const p of arena.values()) {
+    const hp0 = p.hp, mp0 = p.mp;
+    tickRegen(p, now);
+    if (p.hp !== hp0 || p.mp !== mp0) changed = true;
+  }
+  if (changed) bumpArenaRev();
 }, 1000).unref();
 
 // Periodic cleanup of per-user bookkeeping maps to prevent unbounded growth.
@@ -1179,6 +1841,7 @@ app.post('/api/arena/enter', auth, async (req, res) => {
       pvp_kills: base.pvp_kills|0,
       incoming: [],
     });
+    bumpArenaRev();
     if (!wasPresent && feedThrottle('enter', uid)) emitFeed(pickTpl(FEED_ENTER)(base.username), uid, null, 'enter');
     res.json({ ok: true });
   } catch (e) {
@@ -1191,6 +1854,7 @@ app.post('/api/arena/leave', auth, (req, res) => {
   const p = arena.get(req.user.uid);
   if (p) {
     arena.delete(req.user.uid);
+    bumpArenaRev();
     if (!p.dead && feedThrottle('leave', req.user.uid)) emitFeed(pickTpl(FEED_LEAVE)(p.username), req.user.uid, null, 'leave');
   }
   res.json({ ok: true });
@@ -1211,6 +1875,7 @@ app.post('/api/arena/leave-beacon',
         const p = arena.get(u.uid);
         if (p) {
           arena.delete(u.uid);
+          bumpArenaRev();
           if (!p.dead && feedThrottle('leave', u.uid)) emitFeed(pickTpl(FEED_LEAVE)(p.username), u.uid, null, 'leave');
         }
       } catch {}
@@ -1304,6 +1969,7 @@ function claimKill(target, attackerId, now) {
   target.dead = true;
   target.killedBy = attackerId;
   target.deathAt = now;
+  bumpArenaRev();
   return true;
 }
 
@@ -1348,6 +2014,7 @@ app.post('/api/arena/action', auth, async (req, res) => {
     if (crit) dmg = Math.floor(dmg * 1.7);
     dmg = Math.max(1, dmg - Math.floor(tgt.armor / 2));
     tgt.hp = Math.max(0, tgt.hp - dmg);
+    bumpArenaRev();
     pushIncoming(tgt, { kind:'attack', by: me, byName: self.username, dmg, crit, at: now });
     let kill = null;
     if (tgt.hp <= 0 && claimKill(tgt, me, now)) {
@@ -1380,6 +2047,7 @@ app.post('/api/arena/action', auth, async (req, res) => {
 
     self.mp -= sp.cost;
     self.spellCd[key] = now + SPELL_CD_MS;
+    bumpArenaRev();
     const mul = spellMul(self.spellLvl, key);
 
     if (sp.heal) {
@@ -1446,16 +2114,30 @@ app.post('/api/arena/action', auth, async (req, res) => {
   return res.status(400).json({ error: 'bad action' });
 });
 
-app.get('/api/arena/state', auth, (req, res) => {
+app.get('/api/arena/state', auth, async (req, res) => {
   const me = req.user.uid;
-  const self = arena.get(me);
+  let self = arena.get(me);
   const now = Date.now();
+  const hasQueryV = Object.prototype.hasOwnProperty.call(req.query, 'v');
   if (self) {
-    if (now - (self.lastStateAt || 0) < ARENA_STATE_MIN_MS) {
+    // Short-poll clients are rate-limited; long-poll clients are self-paced
+    // by the 20s hold, so we skip the 250ms minimum interval for them.
+    if (!hasQueryV && now - (self.lastStateAt || 0) < ARENA_STATE_MIN_MS) {
       return res.status(429).json({ error: 'too fast' });
     }
     self.lastStateAt = now;
     self.lastSeen = now;
+  }
+  // Long-poll: caller passes ?v=<lastRev>; we hold until the revision moves past
+  // it (or timeout fires, or the socket closes). Skip the wait if the caller
+  // hasn't opted in, or if they already have something to see.
+  const clientRev = Number(req.query.v) | 0;
+  const canWait = hasQueryV && self && !self.dead &&
+    !(self.incoming && self.incoming.length) && arenaRev <= clientRev;
+  if (canWait) {
+    await waitArenaRev(clientRev, ARENA_LONGPOLL_MS, req);
+    self = arena.get(me);
+    if (self) self.lastSeen = Date.now();
   }
   let incoming = [];
   if (self && self.incoming && self.incoming.length) {
@@ -1474,7 +2156,7 @@ app.get('/api/arena/state', auth, (req, res) => {
     spellCd: self.spellCd || {},
     incoming,
   } : { present: false };
-  res.json({ me: meOut, players: arenaListFor(me), now });
+  res.json({ me: meOut, players: arenaListFor(me), now: Date.now(), rev: arenaRev });
 });
 
 const LEADERBOARD_TTL_MS = 10000;
@@ -1521,6 +2203,8 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT',  () => shutdown('SIGINT'));
 
 initDb()
+  .then(() => configureSession(JWT_SECRET))
+  .then(() => initAssets())
   .then(() => loadMarket())
   .then(() => { httpServer = app.listen(PORT, () => console.log(`server listening on :${PORT}`)); })
   .catch(e => { console.error('fatal init error:', e); process.exit(1); });

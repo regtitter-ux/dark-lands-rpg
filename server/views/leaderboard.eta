@@ -1,0 +1,30 @@
+<h1>Таблица лидеров</h1>
+<% if (it.err) { %><p class="err"><%= it.err %></p><% } %>
+<% if (!it.rows || !it.rows.length) { %>
+<p class="muted">Пусто.</p>
+<% } else { %>
+<table>
+<tr><th>#</th><th>Ник</th><th>Кл.</th><th>Ур.</th><th>Эт.</th><th>Зол.</th><th>Бос.</th><th>PvP</th></tr>
+<% it.rows.forEach((r, i) => { %>
+<tr>
+<td><%= i + 1 %></td>
+<td><b><%= r.nick %></b></td>
+<td><%= r.cls || '—' %></td>
+<td><%= r.lvl %></td>
+<td><%= r.stage_max %></td>
+<td><%= r.gold %></td>
+<td><%= r.bosses %></td>
+<td><%= r.pvp_kills %></td>
+</tr>
+<% }) %>
+</table>
+<% } %>
+<hr/>
+<% if (it.session) { %>
+<%~ include('_nav', it) %>
+<% } else { %>
+<ul class="menu">
+<li><a href="/lite/login" accesskey="1">1. Войти</a></li>
+<li><a href="/lite" accesskey="0">0. На главную</a></li>
+</ul>
+<% } %>
